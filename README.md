@@ -15,13 +15,13 @@ PBX → Respawn Agent → The Pond → Signed Edge Policy → SIP Edge Enforceme
 The intended operator experience is deliberately simple:
 
 ```bash
-respawn-agent publish
+respawn publish
 ```
 
 Or, for a specific area of PBX intent:
 
 ```bash
-respawn-agent publish firewall
+respawn publish firewall
 ```
 
 The command should collect the relevant local PBX state, produce a deterministic intent document, and publish that intent to The Pond. The Pond then validates, signs, stores, and distributes the resulting policy or blueprint.
@@ -37,8 +37,6 @@ Respawn is intended to explore whether a FreePBX system can continuously report 
 Respawn is not a conventional backup tool. Its long-term aim is to make full-system backup restoration less central to FreePBX recovery by regenerating PBX configuration from module-reported blueprints held by The Pond.
 
 Traditional backups may still be useful for historical and non-declarative data such as CDRs, logs, call recordings, voicemail, custom sound files, and other artefacts that are not cleanly represented as declared configuration.
-
-The PBX configuration itself is the part Respawn is intended to regenerate.
 
 The intended recovery path is blueprint-led regeneration rather than full-system restoration. How much of a PBX can be cleanly regenerated from declared blueprints, versus recovered from backup, is itself part of what Respawn is exploring.
 
@@ -107,22 +105,24 @@ Source matching has currently been proven for individual `/32` host entries. Bro
 
 The prototype has already been collapsed into a small PBX-side command surface.
 
+The operator-facing command is `respawn`. The local component it drives is the Respawn Agent.
+
 Current examples include:
 
 ```bash
-respawn-agent export firewall
+respawn export firewall
 ```
 
 Exports the relevant FreePBX Firewall state.
 
 ```bash
-respawn-agent publish firewall
+respawn publish firewall
 ```
 
 Exports the firewall state, builds a policy candidate, detects whether the canonical intent has changed, and publishes only when required.
 
 ```bash
-respawn-agent publish firewall --force
+respawn publish firewall --force
 ```
 
 Forces a publish even when the canonical intent hash has not changed.
@@ -132,11 +132,11 @@ The target direction is that Respawn becomes command-driven, predictable, and au
 The larger recovery model should eventually be expressed through commands such as:
 
 ```bash
-respawn-agent enrol
-respawn-agent publish
-respawn-agent status
-respawn-agent blueprint
-respawn-agent verify
+respawn enrol
+respawn publish
+respawn status
+respawn blueprint
+respawn verify
 ```
 
 Those commands are directional examples, not final public interfaces.
