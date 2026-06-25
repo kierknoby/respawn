@@ -38,6 +38,8 @@ Respawn is not a conventional backup tool. Its long-term aim is to make full-sys
 
 Traditional backups may still be useful for historical and non-declarative data such as CDRs, logs, call recordings, voicemail, custom sound files, and other artefacts that are not cleanly represented as declared configuration.
 
+The PBX configuration itself is the part Respawn is intended to regenerate.
+
 The intended recovery path is blueprint-led regeneration rather than full-system restoration. How much of a PBX can be cleanly regenerated from declared blueprints, versus recovered from backup, is itself part of what Respawn is exploring.
 
 The project treats recovery as a control-plane problem involving:
