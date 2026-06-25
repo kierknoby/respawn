@@ -34,7 +34,11 @@ This repository is currently informational. It documents what has been proven in
 
 Respawn is intended to explore whether a FreePBX system can continuously report enough trusted operational state to an external controller to support controlled recovery, replacement, and SIP edge rerouting.
 
-Respawn is not intended to replace normal FreePBX backups. It is intended to sit above and around them.
+Respawn is not a conventional backup tool. Its long-term aim is to make full-system backup restoration less central to FreePBX recovery by regenerating PBX configuration from module-reported blueprints held by The Pond.
+
+Traditional backups may still be useful for historical and non-declarative data such as CDRs, logs, call recordings, voicemail, custom sound files, and other artefacts that are not cleanly represented as declared configuration.
+
+The intended recovery path is blueprint-led regeneration rather than full-system restoration. How much of a PBX can be cleanly regenerated from declared blueprints, versus recovered from backup, is itself part of what Respawn is exploring.
 
 The project treats recovery as a control-plane problem involving:
 
@@ -47,7 +51,7 @@ The project treats recovery as a control-plane problem involving:
 - Replacement PBX provisioning
 - Signed policy enforcement (intended; see terminology note)
 
-The long-term aim is controlled regeneration of a failed PBX, followed by policy-driven traffic rerouting.
+The target outcome is controlled regeneration of a failed PBX, followed by policy-driven traffic rerouting.
 
 ## Current Status
 
@@ -148,7 +152,7 @@ The current development flow is:
 7. The controller/mock merges the candidate into the full edge policy.
 8. A new versioned policy is written. (Cryptographic signing is planned and is currently represented only by the controller/mock signing stage.)
 9. The SIP edge policy apply process updates the active policy.
-10. Kamailio enforces the generated routing include.
+10. Kamailio enforces the generated routing include file.
 11. Drift and effective-policy checks confirm the applied state.
 
 ## Current Prototype Components
@@ -164,7 +168,7 @@ The current prototype covers:
 - Controller-side candidate validation
 - Full edge policy regeneration
 - Versioned policy output (signing planned; not yet implemented)
-- Kamailio generated route include
+- Kamailio generated routing include file
 - Policy drift checking
 - Effective policy reporting
 
@@ -283,7 +287,11 @@ In the current prototype, the controller/edge-side installer issues per-PBX key 
 
 ## Recovery Model
 
-The long-term Respawn recovery model is expected to involve a PBX maintaining a current external blueprint with The Pond.
+The long-term Respawn recovery model is intended to be blueprint-led rather than snapshot-led.
+
+Instead of treating a full-system backup as the primary source of PBX configuration recovery, Respawn is intended to allow a replacement PBX to be regenerated from current declared intent held by The Pond.
+
+A conventional backup restores machine state, including accumulated drift, stale configuration, and potentially broken state from the moment the backup was captured. A Respawn blueprint should describe what the PBX configuration is intended to be, allowing a replacement system to be built from declared module state rather than restored wholesale from an old snapshot.
 
 A blueprint may eventually include:
 
@@ -297,7 +305,9 @@ A blueprint may eventually include:
 - Backup references
 - Provisioning metadata
 
-The exact blueprint format is not yet defined.
+Traditional backups may still be used as secondary recovery sources for historical or non-declarative data, including CDRs, logs, call recordings, voicemail, custom sound files, and other artefacts that are not yet represented in a module blueprint.
+
+The exact blueprint format is not yet defined, and the boundary between blueprint-regenerable configuration and backup-recovered data is part of what the project is intended to explore.
 
 The recovery target is controlled regeneration of a replacement PBX, followed by policy-driven traffic rerouting.
 
