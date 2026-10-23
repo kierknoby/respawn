@@ -1,384 +1,231 @@
 # Respawn for FreePBX 17
+⚠️ Not currently suitable for use in production
 
-Respawn is an experimental FreePBX recovery and SIP edge control-plane project.
+Respawn is an experimental GPLv3+ FreePBX Connectivity module exploring rapid,
+on-demand reconstruction of a replacement PBX from a retained, validated
+blueprint. Conventional disaster recovery often depends on maintaining a second
+PBX or warm-spare infrastructure. Respawn's objective is to make that unnecessary
+for suitable deployments by rebuilding a replacement only when recovery is
+needed. This objective is not yet proven end to end; the project does not claim
+zero downtime, active-call migration or a measured recovery time.
 
-At its simplest, Respawn is intended to become a small, controlled set of commands that allow a FreePBX system to report its current recovery and routing intent to an external controller known as **The Pond**.
+Respawn builds on FreePBX module interfaces. It exports supported configuration
+as typed, dependency-ordered operations and reconstructs those operations on a
+compatible target. It is not a full-system image restore, and configuration
+reconstruction alone is not telephony recovery.
 
-The goal is that a PBX can be enrolled, described, monitored, and eventually regenerated through a predictable command-led workflow, rather than through a collection of manual recovery steps.
+## Ecosystem
 
-The current direction is to collapse complex PBX recovery and SIP rerouting into a simple operational model:
+Respawn's target architecture has five logical components: **The Puddle** is the
+PBX-local supported-state and revision cache; **The Stream** detects changes and
+publishes exact revisions; **The Pond** independently retains blueprints and
+coordinates authorised recovery; **The River** is peer-to-peer federation between
+Ponds; **The Lake** is optional fleet visibility and coordination. The Lake is
+not a data plane, sole repository or recovery dependency. River peers do not need
+a shared database or hosting provider.
 
-```text
-PBX → Respawn Agent → The Pond → Signed Edge Policy → SIP Edge Enforcement
-```
+The Puddle/Stream coordinator connects to an experimental standalone
+[Pond service](pond/README.md): SQLite retention, AES-256-GCM credential escrow,
+scoped enrolment, replay rejection and independent recovery bundles. An independent
+loopback service test deletes source storage and reconstructs a simulated target
+with the exact retained passwords. Public TLS deployment and real FreePBX remain
+untested. Local Pond's separate federation ledger is synthetic; production River
+transport/security and Lake remain unimplemented. See [ecosystem architecture](docs/ecosystem-architecture.md),
+[River federation](docs/river-federation.md),
+[Lake fleet management](docs/lake-fleet-management.md), and
+[recovery authority](docs/recovery-authority.md).
 
-The intended operator experience is deliberately simple:
+## Three Operations
 
-```bash
-respawn publish
-```
+| Operation | Meaning | Current evidence |
+| --- | --- | --- |
+| **Revert** | Plan a return to an earlier retained revision of supported local configuration. | Revision capture, compare and preview are implemented. The synthetic target executes Revert. Native FreePBX execution is blocked by unavailable update/removal and ownership capabilities. |
+| **Regenerate** | Reconcile supported local configuration toward a selected retained blueprint. | Planning and synthetic execution/read-back are tested. Native FreePBX is create-only; updates, removals and verified ownership are unavailable, so plans that need them cannot execute. |
+| **Respawn** | Request a provider-controlled replacement deployment, reconstruct its blueprint, prepare routing and explicitly authorise activation. | Mock orchestration and a local simulated controller are tested. Real provider compatibility, native end-to-end reconstruction, routing and live calls are unverified. |
 
-Or, for a specific area of PBX intent:
+Revert and Regenerate concern the current PBX's managed configuration. They do not
+reverse provider services, billing or routing. Respawn concerns a replacement
+system and requires provider interaction. None of the three restores recordings,
+voicemail media, call detail records, logs or other historical data unless a
+separate recovery service supplies it.
 
-```bash
-respawn publish firewall
-```
+## Blueprint And Recovery Path
 
-The command should collect the relevant local PBX state, produce a deterministic intent document, and publish that intent to The Pond. The Pond then validates, signs, stores, and distributes the resulting policy or blueprint.
+The intended recovery sequence is:
 
-This repository is currently informational. It documents what has been proven in the prototype, what Respawn is intended to become, and what remains to be built. It does not currently contain production-ready code or public installation instructions.
+1. Capture supported FreePBX module configuration with read-only exporters.
+2. Validate it and create a versioned executable blueprint.
+3. Retain the blueprint and detect or declare a recovery requirement.
+4. Request a replacement FreePBX deployment from an authorised provider.
+5. Reconstruct supported configuration in dependency order.
+6. Verify saved configuration, then independently establish runtime and
+   telephony readiness.
+7. Prepare provider connectivity and routing without activating traffic.
+8. Authorise activation under explicit policy and authority controls.
+9. Confirm recovery with independent inbound/outbound calls and bidirectional
+   audio evidence.
 
-> **Note on "signed" terminology.** Throughout this document, "signed" describes the *intended* production model in which The Pond cryptographically signs policy. The current prototype produces **versioned and drift-checked** policy; cryptographic signing is not yet implemented. See Current Limitations.
+The implemented v2 profile covers selected Core users, fixed PJSIP devices and
+selected Ring Groups. Exact compatible module versions and global SIP settings
+are prerequisites. Trunks, inbound/outbound routes, broader numbering and
+extension relationships, voicemail, licences, custom modules, media and history
+are not reconstructed by this profile. See [v2 scope and dependencies](docs/reconstruction-v2.md).
 
-## Purpose
+Blueprint operations are structured, validated module instructions, not arbitrary
+shell commands or dialplan. Exporters are read-only. Writes use supported FreePBX
+interfaces; generated Asterisk files are not edited. Original endpoint credentials
+are represented by immutable references and must be securely staged on source and
+target. Missing or mismatched values block reconstruction rather than silently
+creating replacement credentials.
 
-Respawn is intended to explore whether a FreePBX system can continuously report enough trusted operational state to an external controller to support controlled recovery, replacement, and SIP edge rerouting.
+## Provider Boundary
 
-Respawn is not a conventional backup tool. Its long-term aim is to make full-system backup restoration less central to FreePBX recovery by regenerating PBX configuration from module-reported blueprints held by The Pond.
+The module handles local export, blueprint validation, revision controls,
+reconstruction planning/execution, diagnostics and provider-neutral requests. A
+provider/controller is responsible for enrolment and authority, blueprint
+retention, replacement provisioning, secret delivery, connectivity and SBC
+routing, activation fencing, service lifecycle and resource cleanup. These services
+remain outside module core; the public contracts do not assert compatibility with
+a private provider implementation.
 
-Traditional backups may still be useful for historical and non-declarative data such as CDRs, logs, call recordings, voicemail, custom sound files, and other artefacts that are not cleanly represented as declared configuration.
+Submission, acceptance, configuration, saved-state verification, runtime
+readiness, registration, call/audio evidence, routing preparation and activation
+are separate states. A successful mock or source inspection proves none of the
+live telephony stages.
 
-The intended recovery path is blueprint-led regeneration rather than full-system restoration. How much of a PBX can be cleanly regenerated from declared blueprints, versus recovered from backup, is itself part of what Respawn is exploring.
+## Automatic Protection Status
 
-The project treats recovery as a control-plane problem involving:
+The module includes a configurable reconciliation command and durable local
+publication outbox. When enabled with a provider configuration, it exports the
+supported profile, detects canonical-hash changes, captures and pins revisions,
+publishes exact snapshots with connection-scoped idempotency keys, retries with
+bounded backoff, and retrieves the retained revision to verify its hash. The
+default interval is five minutes. A host administrator must install the schedule;
+module installation does not modify host cron or register a FreePBX scheduler
+job. This polling model observes configuration only when the scheduled command
+runs: changes made after a successful check may remain unpublished until the next
+run. A host failure during that interval can therefore lose the unobserved change;
+the reported state is current only as of its displayed last-check timestamp.
 
-- PBX identity
-- PBX state export
-- Backup and blueprint references
-- Firewall and trusted-source intent
-- SIP edge policy
-- DNS or routing changes
-- Replacement PBX provisioning
-- Signed policy enforcement (intended; see terminology note)
+The standalone Pond implements retention and encrypted credential recovery without
+source files or its token. Each publication escrows exact manifest references,
+checks retrieved passwords for equality, retains the blueprint and verifies its
+retrieval. A separately held recovery token and Pond-side key remain necessary.
+The recovery CLI creates a protected native-compatible blueprint/secret bundle.
+Only verified external transport and credential checks can report
+`protected_and_current`; loopback/injected transports never do. This is not yet
+real off-site or FreePBX evidence. Install the supplied cron entry on the source
+and deploy the independent Pond only in an authorised isolated lab. See
+[the first-test procedure](docs/initial-test.md).
 
-The target outcome is controlled regeneration of a failed PBX, followed by policy-driven traffic rerouting.
+Pre-test corrections add chunk-backed local history (default 50, configurable
+2-500 revisions), parent-conditioned Pond recovery-head promotion and bounded
+protected diagnostics. The supported limit remains 100 operations and a 64 KiB
+HTTPS envelope. Read-only `php tools/preflight.php --role=pond` or `--role=recovery`
+checks local prerequisites; source checks require an actual FreePBX host. See
+[audit dispositions](docs/pre-test-review.md) for migration and host gates.
 
 ## Current Status
 
-Respawn is in prototype development.
+| Area | Locally implemented and tested | Not established |
+| --- | --- | --- |
+| Reconstruction | Typed selected user/device/group profile, dependency planning, preflight, checkpoints, conflict handling, apply boundary and read-back contracts | Real FreePBX installation/reconstruction or full PBX coverage |
+| Revisions | Capture, comparison, planning, synthetic Revert/Regenerate execution and acknowledgement binding | Native destructive/update execution or native ownership proof |
+| Provider workflow | Mock orchestration, neutral HTTPS contract tests, persistent local simulation and explicit policy gates | Real provider compatibility, provisioning, connectivity or SBC control |
+| Protection lifecycle | Coordinator, pinned FIFO retry outbox, standalone SQLite Pond, AES-GCM escrow, source-free native-compatible recovery bundle and independent-process test | Host cron installation, public TLS deployment, hardware durability and real FreePBX testing |
+| Recovery evidence | Synthetic tests, schema/hash validation, package/build checks | Live registration, inbound/outbound calls, bidirectional audio or measured RTO |
 
-The current prototype has demonstrated a limited but working control-plane path:
+The project is a development foundation, not a production recovery service. Native
+Revert and Regenerate controls remain read-only where the adapter lacks required
+capabilities. The native adapter currently permits selected creates only; its
+revision target rejects updates/removals and marks ownership unverified; GUI and
+revision CLI execution do not supply an apply callback. The separate
+reconstruction CLI has a fixed reload callback for its selected create path.
+None of this is native revision-recovery evidence. The local simulation exercises
+additional behaviour but is not native FreePBX evidence.
 
-```text
-FreePBX Firewall Trusted Zone
-→ PBX-Side Respawn Agent
-→ Canonical Policy Candidate
-→ Controller-Side Validation
-→ Versioned SIP Edge Policy
-→ Kamailio Policy Enforcement
+## Development
+
+The FreePBX Connectivity page is organised as Overview, Protection, Revisions,
+Recovery and Settings. Detailed sanitised JSON remains expandable for diagnostics;
+view changes are server-rendered and do not trigger provider refreshes.
+
+Persistent Respawn state is owned by the FreePBX service account even when an
+administrator runs `fwconsole` as root. The root-only `storage-repair` command is
+restricted to validated Respawn files under `ASTVARLIBDIR/respawn`; credential
+files and Pond keys are deliberately outside that repair scope.
+
+The module targets FreePBX 17 and PHP 8.2+ conventions. It is experimental and
+has not been established as installable on a real FreePBX host. Do not install it
+on a production PBX. No deployment, live provider test or production change is
+part of this repository workflow.
+
+Install development dependencies and run the local gates:
+
+```sh
+python3 -m pip install -r requirements-dev.txt
+python3 -m playwright install chromium
+sh tools/check.sh
+XDEBUG_MODE=off php tools/demo.php
 ```
 
-The current prototype focuses on one specific type of PBX intent:
-
-- Trusted SIP source addresses derived from the FreePBX firewall trusted zone
-
-This is not a full PBX recovery system yet. It is a working building block for the wider Respawn architecture.
-
-## What Has Already Been Achieved
-
-The prototype has already proven the following behaviours in a live development lab:
-
-- Multiple FreePBX systems can publish separate intent.
-- Each PBX can be represented as a separate identity.
-- Each PBX can publish through a restricted per-PBX inbox.
-- FreePBX firewall trusted zone changes can be exported.
-- Trusted-source intent can be normalised into a canonical candidate.
-- Candidate changes can be detected by hashing operational intent.
-- Timestamp churn does not cause unnecessary republishes.
-- No-change runs are suppressed cleanly.
-- Added and removed trusted sources are logged clearly.
-- A controller-side receiver can validate PBX candidates.
-- Accepted candidates can be merged into a full SIP edge policy.
-- The full policy can preserve multiple PBX domains at once.
-- The generated edge policy can be applied atomically.
-- Kamailio can enforce the generated source-gated routing policy.
-- Drift checks can confirm applied policy matches generated policy.
-- Effective policy reports can show what the edge is enforcing.
-
-The current lab has demonstrated two separate FreePBX systems publishing intent into the same edge policy without overwriting each other.
-
-The prototype has also demonstrated that adding or removing a trusted IP in FreePBX can be reflected into the generated SIP edge policy.
-
-Source matching has currently been proven for individual `/32` host entries. Broader CIDR range enforcement is part of the intended policy model but has not yet been proven in this prototype.
-
-## Prototype Command Model
-
-The prototype has already been collapsed into a small PBX-side command surface.
-
-The operator-facing command is `respawn`. The local component it drives is the Respawn Agent.
-
-Current examples include:
-
-```bash
-respawn export firewall
-```
-
-Exports the relevant FreePBX Firewall state.
-
-```bash
-respawn publish firewall
-```
-
-Exports the firewall state, builds a policy candidate, detects whether the canonical intent has changed, and publishes only when required.
-
-```bash
-respawn publish firewall --force
-```
-
-Forces a publish even when the canonical intent hash has not changed.
-
-The target direction is that Respawn becomes command-driven, predictable, and automatable.
-
-The larger recovery model should eventually be expressed through commands such as:
-
-```bash
-respawn enrol
-respawn publish
-respawn status
-respawn blueprint
-respawn verify
-```
-
-Those commands are directional examples, not final public interfaces.
-
-## Current Prototype Flow
-
-The current development flow is:
-
-1. FreePBX Firewall Trusted Sources are read from FreePBX state.
-2. The PBX-side exporter writes a structured firewall export.
-3. The Respawn Agent builds a policy candidate from that export.
-4. The agent hashes the canonical intent.
-5. If the intent has changed, the candidate is published.
-6. The controller-side receiver validates the candidate.
-7. The controller/mock merges the candidate into the full edge policy.
-8. A new versioned policy is written. (Cryptographic signing is planned and is currently represented only by the controller/mock signing stage.)
-9. The SIP edge policy apply process updates the active policy.
-10. Kamailio enforces the generated routing include file.
-11. Drift and effective-policy checks confirm the applied state.
-
-## Current Prototype Components
-
-The current prototype covers:
-
-- PBX-side FreePBX firewall trusted-source export
-- PBX-side Respawn agent
-- Canonical intent hashing
-- Change and no-change detection
-- Restricted publish path
-- Per-PBX identity separation
-- Controller-side candidate validation
-- Full edge policy regeneration
-- Versioned policy output (signing planned; not yet implemented)
-- Kamailio generated routing include file
-- Policy drift checking
-- Effective policy reporting
-
-The current prototype does not yet cover:
-
-- Full PBX blueprint generation
-- Replacement PBX provisioning
-- Trunk migration
-- Endpoint migration
-- DNS failover orchestration
-- Production enrolment
-- Production key rotation
-- Production revocation
-- Customer-facing installation
-
-## Architecture
-
-The intended architecture has three main roles:
-
-- PBX system
-- The Pond
-- SIP edge node
-
-### PBX System
-
-The PBX system runs a local Respawn Agent.
-
-The agent is responsible for:
-
-- Reading selected FreePBX state
-- Normalising that state into deterministic intent
-- Detecting meaningful changes
-- Publishing intent to The Pond
-- Reporting local agent status
-- Eventually maintaining a current Respawn blueprint
-
-In the current prototype, the agent reads trusted sources from the FreePBX Firewall Trusted Zone.
-
-### The Pond
-
-The Pond is the planned external controller for Respawn.
-
-Its expected responsibilities include:
-
-- PBX enrolment
-- PBX identity validation
-- Intent validation
-- Policy generation
-- Policy signing
-- Blueprint storage
-- Replacement PBX orchestration
-- Edge policy distribution
-- Key rotation and revocation
-
-The Pond should be the trust authority.
-
-SIP edge nodes should trust signed controller policy, not individual PBX systems directly.
-
-In the current development prototype, a temporary controller/mock performs part of this role. The policy signing stage is currently a placeholder: policy is versioned and drift-checked, but not cryptographically signed.
-
-### SIP Edge Node
-
-The SIP edge node enforces the active routing policy.
-
-In the current prototype, Kamailio is used as the SIP edge enforcement layer.
-
-The edge policy is generated into routing rows containing:
-
-- Domain
-- Mode
-- Allowed source
-- Backend address
-- Backend port
-
-The current prototype supports IP-gated routing behaviour for PBX domains, proven for `/32` host sources.
-
-## Current Policy Model
-
-The current prototype policy model is intentionally narrow.
-
-A PBX publishes intent for a SIP domain and backend, including a set of trusted source addresses. The controller validates that candidate and produces an edge policy.
-
-A generated policy row is conceptually:
-
-```text
-Domain | Mode | Source | Backend IP | Backend Port
-```
-
-Example modes under development include:
-
-- `ip_gated`
-- `disabled`
-- `roaming_auth`
-
-Only the currently implemented prototype behaviour should be treated as tested. In particular, `ip_gated` is proven for `/32` host sources; `roaming_auth` is represented in the model but not yet implemented as live enforcement.
-
-## Identity and Trust Model
-
-The current development prototype uses restricted per-PBX inboxes as a practical workaround.
-
-The intended production trust model is:
-
-```text
-PBX Owns Its Private Key
-The Pond Owns Enrolment And Trust Decisions
-The Pond Validates PBX Intent
-The Pond Signs Policy
-SIP Edge Nodes Enforce Signed Policy
-```
-
-The PBX should not be able to directly instruct an edge node to change routing without controller validation.
-
-The edge node should not need to trust every PBX individually. It should trust The Pond.
-
-In the current prototype, the controller/edge-side installer issues per-PBX key material and the PBX-side installer consumes it. This is a deliberate development approximation of "The Pond owns enrolment", chosen in preference to PBXs self-generating trust and asking to be accepted. The production direction (for example PBX-generated CSR or mTLS enrolment) is not yet implemented.
-
-## Recovery Model
-
-The long-term Respawn recovery model is intended to be blueprint-led rather than snapshot-led.
-
-Instead of treating a full-system backup as the primary source of PBX configuration recovery, Respawn is intended to allow a replacement PBX to be regenerated from current declared intent held by The Pond.
-
-A conventional backup restores machine state, including accumulated drift, stale configuration, and potentially broken state from the moment the backup was captured. A Respawn blueprint should describe what the PBX configuration is intended to be, allowing a replacement system to be built from declared module state rather than restored wholesale from an old snapshot.
-
-A blueprint may eventually include:
-
-- FreePBX version and module state
-- Trunk configuration
-- Extension and endpoint state
-- Routing state
-- Firewall and trusted-source policy
-- SIP edge policy
-- DNS or routing dependencies
-- Backup references
-- Provisioning metadata
-
-Traditional backups may still be used as secondary recovery sources for historical or non-declarative data, including CDRs, logs, call recordings, voicemail, custom sound files, and other artefacts that are not yet represented in a module blueprint.
-
-The exact blueprint format is not yet defined, and the boundary between blueprint-regenerable configuration and backup-recovered data is part of what the project is intended to explore.
-
-The recovery target is controlled regeneration of a replacement PBX, followed by policy-driven traffic rerouting.
-
-## Current Limitations
-
-Respawn is not currently production-ready.
-
-Known limitations include:
-
-- **Policy is versioned and drift-checked, but not yet cryptographically signed.** Cryptographic signing is planned and is currently represented only by the controller/mock signing stage. "Signed" elsewhere in this document refers to the intended production model.
-- **Source matching is proven for individual `/32` host entries only.** Broader CIDR range enforcement is part of the intended policy model but has not yet been proven in this prototype.
-- `roaming_auth` mode is represented in the policy model but is not yet implemented as live enforcement.
-- No production Pond API
-- No production enrolment flow
-- No production key rotation
-- No production revocation model
-- No full FreePBX blueprint format
-- No replacement PBX build process
-- No trunk migration process
-- No endpoint migration process
-- No production DNS orchestration
-- No customer-facing installer
-
-The current development flow uses a temporary controller/mock implementation. It is suitable for proving control-plane behaviour, not for production deployment.
-
-## Security and Repository Hygiene
-
-This is experimental development software. When working with the prototype or its installers, do not commit or publicly host any generated output. In particular, never add the following to this repository or any public location:
-
-- Generated private keys or per-PBX key material
-- Populated agent configuration (for example `/etc/20tele/respawn-agent.json` with real values)
-- Terminal logs or installer output containing key material or secrets
-- Generated policy files containing live infrastructure addresses you do not wish to disclose
-
-The installer scripts themselves are development tooling. The risk is in their *output*, not their existence. Treat any key material issued during enrolment as a secret.
-
-## Repository Status
-
-This repository currently exists to document the concept, prototype status, and development direction.
-
-It should not be treated as installable production software.
-
-No guarantees are made about interface stability, schema stability, deployment safety, or compatibility.
-
-## Development Direction
-
-Planned areas of work include:
-
-- Formal Pond enrolment flow
-- Signed PBX intent
-- Cryptographic policy signing (replacing the current versioned-only output)
-- Controller-side policy authority
-- Key rotation and revocation
-- Defined Respawn blueprint schema
-- Expanded FreePBX state export
-- Replacement PBX provisioning
-- Kamailio edge policy hardening (including broader CIDR enforcement)
-- Failure detection
-- Controlled reroute workflow
-- Test fixtures and repeatable lab deployment
-
-## Licence
-
-GPLv3+. See LICENSE.
-
-## AI Disclosure
-
-This project has been developed with AI assistance for code generation, review, testing, and documentation. Changes should still be reviewed, tested, and accepted by a human maintainer before deployment.
-
-## Author
-
-@kierknoby, Kieran Knowles-Byrne // FreePBX UK
+The check command runs PHP lint and synthetic suites, revision regressions,
+provider/corrective checks, schema and hash validation, website generation and
+package checks. Browser checks run when Playwright Chromium is launchable. On a
+local host where it cannot launch, the script reports the browser checks as
+skipped; CI provisions Chromium and treats browser-test failures as failures.
+
+Diagnostic rotation regression checks cover the current log and three private
+archives using fresh filesystem metadata, including a verified PHP 8.3.6 CI
+compatibility correction. Exact reproduction and test evidence are recorded in
+[validation history](docs/validation.md).
+
+The isolated [Local Pond development demo](development/local-pond/README.md) uses
+loopback HTTP, synthetic data and a simulated target. It is excluded from the
+module and website packages and does not prove FreePBX, SIP, call/audio or provider
+integration. The static site is built with `python3 tools/build_site.py`; packages
+are generated under ignored `artifacts/` by `python3 tools/package.py`.
+
+## Roadmap
+
+1. Prove module installation, permissions, settings, CLI discovery and the
+   supported create/reload/read-back profile and host-scheduled reconciliation on
+   disposable FreePBX 17 hosts.
+2. Implement and independently verify safe native updates, removals and ownership
+   tracking before making Revert or Regenerate executable.
+3. Prove the implemented standalone Pond's immutable secret-reference continuity
+   over authorised separate-host HTTPS, with independent key/token custody and
+   the original source unavailable; current evidence is local independent-process
+   testing with synthetic PBX state.
+4. Expand supported reconstruction to trunks, inbound/outbound routes, numbering,
+   destinations and other required modules, with dependency and coverage checks.
+5. Integrate provider-controlled replacement provisioning, connectivity and SBC
+   preparation/activation under explicit authority fencing.
+6. Verify registration and independent inbound/outbound calls with bidirectional
+   audio, then measure the complete recovery path and its failure cases.
+
+Dependencies, proof requirements and sequencing are detailed in the
+[capability roadmap](docs/capabilities-and-roadmap.md) and
+[operational path](docs/operational-path.md). No recovery duration is claimed.
+
+## Documentation
+
+- [Architecture](docs/architecture.md)
+- [Reconstruction profile and lab requirements](docs/reconstruction-v2.md)
+- [Initial FreePBX 17 source-to-target test](docs/initial-test.md)
+- [Capabilities and roadmap](docs/capabilities-and-roadmap.md)
+- [Provider contracts](docs/provider-contracts.md)
+- [Complete ecosystem architecture](docs/ecosystem-architecture.md)
+- [River peer federation](docs/river-federation.md)
+- [Lake fleet management](docs/lake-fleet-management.md)
+- [Recovery authority and fencing](docs/recovery-authority.md)
+- [Federation testing and evidence](docs/federation-testing.md)
+- [Operational path and measurements](docs/operational-path.md)
+- [CLI and synthetic demo](docs/cli-and-demo.md)
+- [FreePBX development and installation notes](docs/freepbx-development.md)
+- [Security](docs/security.md)
+- [Current handover](docs/handover.md)
+- [Historical prototype notes](docs/history.md)
+
+Respawn is licensed under GPLv3+; see [LICENSE](LICENSE). External providers and
+controllers have their own implementation and licensing responsibilities.

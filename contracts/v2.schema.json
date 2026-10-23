@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://respawn.in1.click/contracts/v2.schema.json",
+  "title": "Respawn selected user/PJSIP/Ring Groups reconstruction v2",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema","sourcePbxId","modules","coverage","operations","apply","contentHash"],
+  "properties": {
+    "schema": {"const":"respawn.reconstruction.v2"},
+    "sourcePbxId": {"type":"string","pattern":"^[a-zA-Z0-9._-]{1,80}$"},
+    "modules": {"type":"object","additionalProperties":false,"required":["framework","core","ringgroups","sipsettings"],"properties":{"framework":{"$ref":"#/$defs/version"},"core":{"$ref":"#/$defs/version"},"ringgroups":{"$ref":"#/$defs/version"},"sipsettings":{"$ref":"#/$defs/version"}}},
+    "coverage": {"type":"object","additionalProperties":false,"required":["selectedComplete","blockingGaps","excluded"],"properties":{"selectedComplete":{"const":true},"blockingGaps":{"const":[]},"excluded":{"type":"array","items":{"type":"string"}}}},
+    "operations": {"type":"array","minItems":1,"maxItems":100,"items":{"$ref":"#/$defs/operation"}},
+    "apply": {"const":"freepbx.reload.v1"},
+    "contentHash": {"type":"string","pattern":"^[a-f0-9]{64}$"}
+  },
+  "$defs": {
+    "version":{"type":"string","pattern":"^17\\.[0-9]+(?:\\.[0-9]+){0,4}$"},
+    "number":{"type":"string","pattern":"^[0-9]{2,8}$"},
+    "label":{"type":"string","pattern":"^[a-zA-Z0-9 ._-]{1,64}$"},
+    "yesNo":{"enum":["yes","no"]},
+    "settings":{
+      "type":"object","additionalProperties":false,
+      "required":["context","transport","dtmfmode","allow","disallow","direct_media","rtp_symmetric","force_rport","rewrite_contact","max_contacts","remove_existing","media_encryption"],
+      "properties":{"context":{"const":"from-internal"},"transport":{"const":""},"dtmfmode":{"enum":["rfc4733","auto","inband"]},"allow":{"type":"string","pattern":"^(ulaw|alaw|g722)(,(ulaw|alaw|g722)){0,2}$"},"disallow":{"const":"all"},"direct_media":{"$ref":"#/$defs/yesNo"},"rtp_symmetric":{"$ref":"#/$defs/yesNo"},"force_rport":{"$ref":"#/$defs/yesNo"},"rewrite_contact":{"$ref":"#/$defs/yesNo"},"max_contacts":{"type":"integer","minimum":1,"maximum":10},"remove_existing":{"$ref":"#/$defs/yesNo"},"media_encryption":{"const":"no"}},
+      "allOf":[{"if":{"properties":{"max_contacts":{"const":1}}},"then":{"properties":{"remove_existing":{"const":"yes"}}}}]
+    },
+    "operation":{
+      "type":"object","additionalProperties":false,
+      "required":["id","adapter","schemaVersion","object","action","parameters","dependsOn","requiredCapabilities","preconditions","secretRefs","postconditions","verification"],
+      "properties":{
+        "id":{"type":"string","pattern":"^(user|pjsip|ringgroup):[0-9]{2,8}$"},
+        "adapter":{"enum":["core.user.v1","core.pjsip.v1","ringgroups.v1"]},"schemaVersion":{"const":1},
+        "object":{"type":"object","additionalProperties":false,"required":["type","identity"],"properties":{"type":{"enum":["user","pjsip","ringgroup"]},"identity":{"$ref":"#/$defs/number"}}},
+        "action":{"const":"ensure"},"parameters":{"type":"object"},
+        "dependsOn":{"type":"array","uniqueItems":true,"items":{"type":"string","pattern":"^(user|pjsip|ringgroup):[0-9]{2,8}$"}},
+        "requiredCapabilities":{"type":"array","minItems":1,"maxItems":1},
+        "preconditions":{"const":["absent_or_equivalent","no_foreign_owner"]},"secretRefs":{},
+        "postconditions":{"const":["saved_state_matches","secret_identity_preserved"]},"verification":{"const":"readback.v1"}
+      },
+      "allOf":[
+        {"if":{"properties":{"adapter":{"const":"core.user.v1"}}},"then":{"properties":{
+          "object":{"properties":{"type":{"const":"user"}}},"requiredCapabilities":{"const":["core.user.v1"]},"secretRefs":{"const":[]},
+          "parameters":{"type":"object","additionalProperties":false,"required":["name","voicemail"],"properties":{"name":{"$ref":"#/$defs/label"},"voicemail":{"const":"novm"}}}
+        }}},
+        {"if":{"properties":{"adapter":{"const":"core.pjsip.v1"}}},"then":{"properties":{
+          "object":{"properties":{"type":{"const":"pjsip"}}},"requiredCapabilities":{"const":["core.pjsip.v1"]},
+          "secretRefs":{"type":"object","additionalProperties":false,"required":["authPassword"],"properties":{"authPassword":{"type":"string","pattern":"^secret:[a-zA-Z0-9._-]{1,80}:[0-9]{2,8}:[a-zA-Z0-9._-]{1,64}$"}}},
+          "parameters":{"type":"object","additionalProperties":false,"required":["user","description","authUsername","settings"],"properties":{"user":{"$ref":"#/$defs/number"},"description":{"$ref":"#/$defs/label"},"authUsername":{"type":"string","pattern":"^[a-zA-Z0-9._-]{1,80}$"},"settings":{"$ref":"#/$defs/settings"}}}
+        }}},
+        {"if":{"properties":{"adapter":{"const":"ringgroups.v1"}}},"then":{"properties":{
+          "object":{"properties":{"type":{"const":"ringgroup"}}},"requiredCapabilities":{"const":["ringgroups.v1"]},"secretRefs":{"const":[]},
+          "parameters":{"type":"object","additionalProperties":false,"required":["description","strategy","timeout","members","destination"],"properties":{"description":{"$ref":"#/$defs/label"},"strategy":{"const":"ringall"},"timeout":{"type":"integer","minimum":1,"maximum":120},"members":{"type":"array","minItems":1,"maxItems":50,"uniqueItems":true,"items":{"$ref":"#/$defs/number"}},"destination":{"type":"string","pattern":"^(hangup|[0-9]{2,8})$"}}}
+        }}}
+      ]
+    }
+  },
+  "$comment":"PHP additionally enforces object-ID matching, exact dependency references, collision/cycle detection, secret scope and exact runtime module versions. Hash is not a signature. NativeProfile defines the deliberately strict implicit defaults."
+}

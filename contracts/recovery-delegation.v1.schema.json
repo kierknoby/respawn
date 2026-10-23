@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://respawn.in1.click/contracts/recovery-delegation.v1.schema.json",
+  "title": "Respawn Recovery Delegation v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "delegationId", "tenantId", "sourcePbxId", "revisionId", "contentHash", "recoveryPondId", "replacementPbxId", "allowedActions", "issuedBy", "issuedAt", "expiresAt", "nonce", "state"],
+  "properties": {
+    "schema": {"const": "respawn.recovery-delegation.v1"},
+    "delegationId": {"type": "string", "pattern": "^[a-zA-Z0-9._:-]{1,128}$"},
+    "tenantId": {"type": "string", "pattern": "^[a-zA-Z0-9._:-]{1,128}$"},
+    "fleetId": {"type": "string", "pattern": "^[a-zA-Z0-9._:-]{1,128}$"},
+    "sourcePbxId": {"type": "string", "pattern": "^[a-zA-Z0-9._-]{1,80}$"},
+    "revisionId": {"type": "string", "pattern": "^rev-[a-f0-9]{32}$"},
+    "contentHash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "recoveryPondId": {"type": "string", "pattern": "^[a-zA-Z0-9._:-]{1,128}$"},
+    "replacementPbxId": {"type": "string", "pattern": "^[a-zA-Z0-9._-]{1,80}$"},
+    "allowedActions": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["blueprint.retrieve", "credential.retrieve", "replacement.provision", "configuration.reconstruct", "connectivity.prepare", "routing.prepare"]}},
+    "issuedBy": {"type": "string", "pattern": "^[a-zA-Z0-9._:-]{1,128}$"},
+    "issuedAt": {"type": "string", "format": "date-time"},
+    "expiresAt": {"type": "string", "format": "date-time"},
+    "nonce": {"type": "string", "pattern": "^[a-f0-9]{32,128}$"},
+    "state": {"enum": ["active", "revoked", "expired"]},
+    "approvalRef": {"type": "string", "pattern": "^[a-zA-Z0-9._:/-]{1,256}$"}
+  }
+}
