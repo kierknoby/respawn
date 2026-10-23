@@ -16,7 +16,7 @@ reconstruction alone is not telephony recovery.
 
 ## Ecosystem
 
-Respawn's target architecture has five logical components: **The Puddle** is the
+Respawn's target architecture has five logical components: **The Puddle** (formerly the Local Pond) is the
 PBX-local supported-state and revision cache; **The Stream** detects changes and
 publishes exact revisions; **The Pond** independently retains blueprints and
 coordinates authorised recovery; **The River** is peer-to-peer federation between
