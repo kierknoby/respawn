@@ -29,7 +29,7 @@ The Puddle/Stream coordinator connects to an experimental standalone
 scoped enrolment, replay rejection and independent recovery bundles. An independent
 loopback service test deletes source storage and reconstructs a simulated target
 with the exact retained passwords. Public TLS deployment and real FreePBX remain
-untested. Local Pond's separate federation ledger is synthetic; production River
+untested. The Puddle's separate federation ledger is synthetic; production River
 transport/security and Lake remain unimplemented. See [ecosystem architecture](docs/ecosystem-architecture.md),
 [River federation](docs/river-federation.md),
 [Lake fleet management](docs/lake-fleet-management.md), and
