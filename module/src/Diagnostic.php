@@ -21,6 +21,8 @@ final class Diagnostic
         'MODULE_VERSION_INCOMPATIBLE' => ['A required module is unavailable or has an incompatible version.', 'Check enabled module versions against the blueprint prerequisites before mutation.'],
         'TARGET_CONFIGURATION_CONFLICT' => ['A target object differs from the intended configuration.', 'Inspect the object and reconcile it explicitly; Respawn will not overwrite it.'],
         'PROVIDER_CONNECTION_FAILED' => ['The provider connection could not be verified.', 'Check the saved endpoint, allowed host, protected credential reference and network/TLS policy.'],
+        'RESPAWN_STORAGE_UNAVAILABLE' => ['Respawn cannot access its protected state storage.', 'Run `fwconsole respawn storage-repair` as root, then retry under the FreePBX service account. Existing data was not reset.'],
+        'PROVIDER_DISABLED' => ['Provider execution is disabled; no recovery operation was submitted.', 'Select and authorise a compatible provider connection before requesting Respawn.'],
         'PROVIDER_RESPONSE_REJECTED' => ['The provider response failed identity, schema or freshness validation.', 'Retain the correlation reference and reconcile through the same provider connection.'],
         'PUBLICATION_OUTCOME_UNKNOWN' => ['The publication request may have been accepted, but no valid acknowledgement was received.', 'Reconcile the original content hash with the same provider connection before retrying.'],
         'LAUNCH_OUTCOME_UNKNOWN' => ['The launch request may have been accepted, but no valid operation receipt was received.', 'Reconcile the original submission ID; do not create a new launch.'],
@@ -73,6 +75,10 @@ final class Diagnostic
 
     private static function infer(string $message, string $stage): string
     {
+        if (str_starts_with($message, 'RESPAWN_STATE_') || str_starts_with($message, 'RESPAWN_STORAGE_')
+            || str_starts_with($message, 'STATE_CHUNK_') || str_starts_with($message, 'STATE_STORAGE_')) {
+            return 'RESPAWN_STORAGE_UNAVAILABLE';
+        }
         if (str_contains($message, 'SECRET_MANIFEST_MISSING')) { return 'SECRET_MANIFEST_MISSING'; }
         if (str_contains($message, 'SECRET_MANIFEST_UNSAFE')) { return 'SECRET_MANIFEST_UNSAFE'; }
         if (str_contains($message, 'SECRET_REFERENCE_FILE_UNSAFE')) { return 'SECRET_REFERENCE_FILE_UNSAFE'; }
@@ -83,6 +89,7 @@ final class Diagnostic
         if (str_contains($message, 'MODULE_VERSION_INCOMPATIBLE') || str_contains($message, 'MODULES_UNAVAILABLE')) { return 'MODULE_VERSION_INCOMPATIBLE'; }
         if (str_contains($message, 'TARGET_CONFIGURATION_CONFLICT') || str_contains($message, 'MISMATCH')) { return 'TARGET_CONFIGURATION_CONFLICT'; }
         if (str_contains($message, 'PROVIDER_CONNECTION_FAILED') || str_contains($message, 'transport failed') || str_contains($message, 'DNS resolution failed')) { return 'PROVIDER_CONNECTION_FAILED'; }
+        if (str_contains($message, 'PROVIDER_DISABLED')) { return 'PROVIDER_DISABLED'; }
         if (str_contains($message, 'PROVIDER_RESPONSE_REJECTED') || str_contains($message, 'response rejected')) { return 'PROVIDER_RESPONSE_REJECTED'; }
         if (str_contains($message, 'READINESS_EXPIRED')) { return 'READINESS_EXPIRED'; }
         if (str_contains($message, 'REVISION_CONFLICT') || str_contains($message, 'STALE')) { return 'REVISION_CONFLICT'; }

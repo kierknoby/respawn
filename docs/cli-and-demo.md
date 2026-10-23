@@ -127,6 +127,15 @@ is marked legacy. Native FreePBX command
 registration and permissions are not integration-tested here. Do not give a PBX
 web user privileged shell access to make the CLI work.
 
+`fwconsole respawn storage-repair` is a separate root-only recovery action for a
+confirmed ownership mismatch. It accepts no path arguments; it validates the
+configured `ASTVARLIBDIR/respawn` tree against managed journal/chunk/lock/log
+names, locks storage, rejects symlinks, hardlinks and unexpected files, then
+restores the parent service account's ownership and 0700/0600 modes without
+deleting or resetting state. Stop cron/GUI writers first. Do not use shell
+`chown -R`; protected secrets outside this exact tree are never touched. Verify
+afterward by running status as the FreePBX service account and root.
+
 The neutral HTTPS JSON adapter has injected-transport contract tests, not real
 provider integration. See https-profile.md. Enrolment/token issuance is external.
 Use `reconcileSubmission --submission-id=SUBMISSION_ID` for lookup-only

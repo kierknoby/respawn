@@ -28,7 +28,9 @@ if ($role === 'source') {
     $checks['fwconsole_executable'] = is_file($console) && is_executable($console);
     $checks['freepbx_configuration_readable'] = is_readable('/etc/freepbx.conf');
     $checks['pdo_mysql'] = class_exists(PDO::class) && in_array('mysql', PDO::getAvailableDrivers(), true);
-    $account = function_exists('posix_getpwuid') ? posix_getpwuid(posix_geteuid()) : false;
+    $checks['posix_ownership_functions'] = function_exists('posix_geteuid') && function_exists('posix_getpwuid')
+        && function_exists('chown') && function_exists('chgrp');
+    $account = $checks['posix_ownership_functions'] ? posix_getpwuid(posix_geteuid()) : false;
     $checks['run_as_asterisk'] = ($account['name'] ?? '') === 'asterisk';
     $cronPath = $options['cron'] ?? '/etc/cron.d/respawn-protection';
     $cron = is_file($cronPath) && is_readable($cronPath) ? file_get_contents($cronPath) : '';

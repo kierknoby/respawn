@@ -31,9 +31,12 @@ final class Application
         $mode = $this->settings['mode'] ?? 'disabled';
         $connectionId = $this->connectionId();
         $scope = self::scope($connectionId, $identity);
-        $this->registerConnection($connectionId, $identity, $mode);
         $label = $mode === 'mock' ? 'MOCK / SYNTHETIC DATA / NO LIVE INFRASTRUCTURE'
             : ($this->provider ? 'PROVIDER CONTRACT ADAPTER / REAL INTEGRATION UNVERIFIED' : 'PROVIDER EXECUTION DISABLED');
+        if ($command === 'status' && $this->provider === null && $mode !== 'mock') {
+            return $this->localOnlyStatus($connectionId, $identity, $label);
+        }
+        if (in_array($command, ['status','publish','respawn'], true)) { $this->registerConnection($connectionId, $identity, $mode); }
         if ($command === 'export') {
             return FirewallIntent::create($identity, true, $this->firewall->trustedIpv4Sources(), gmdate(DATE_ATOM));
         }
@@ -45,10 +48,7 @@ final class Application
         }
         $managementActions = ['status','reconcileSubmission','retrySubmission','operation','cancel','teardown','activate'];
         if ($mode !== 'mock' && $this->provider === null && !in_array($command, $managementActions, true)) {
-            throw new RuntimeException('No production provider adapter is installed. Select explicit mock mode for synthetic demonstrations.');
-        }
-        if ($command === 'status' && $this->provider === null && $mode !== 'mock') {
-            return $this->localOnlyStatus($connectionId, $identity, $label);
+            throw new RuntimeException('PROVIDER_DISABLED');
         }
         $provider = $this->provider ?? (($mode === 'mock') ? $this->providerFor($connectionId) : null);
         return match ($command) {
@@ -71,6 +71,23 @@ final class Application
         };
     }
 
+    public function cachedStatus(): array
+    {
+        $identity=$this->settings['identity'] ?? 'unconfigured';
+        $mode=$this->settings['mode'] ?? 'disabled';
+        $label=$mode === 'mock' ? 'MOCK / SYNTHETIC DATA / NO LIVE INFRASTRUCTURE'
+            : ($this->provider ? 'PROVIDER CONTRACT ADAPTER / REAL INTEGRATION UNVERIFIED' : 'PROVIDER EXECUTION DISABLED');
+        $status=$this->localStatus($this->connectionId(),$identity);
+        $status['label']=$label;
+        $status['providerStatus']='cached_unverified';
+        return $status;
+    }
+
+    public function currentBlueprint(): array
+    {
+        return $this->blueprint($this->settings['identity'] ?? 'unconfigured');
+    }
+
     public function runSafely(string $command, array $arguments = []): array
     {
         try { return $this->run($command, $arguments); }
@@ -79,9 +96,10 @@ final class Application
                 : (is_string($arguments['id'] ?? null) ? $arguments['id'] : null);
             $diagnostic = Diagnostic::forThrowable($exception, $command, $reference);
             Diagnostic::log($diagnostic);
-                $this->store->update(static function (array &$state) use ($diagnostic): void {
+            try { $this->store->update(static function (array &$state) use ($diagnostic): void {
                     $state['diagnostics'][$diagnostic['correlationId']] = $diagnostic + ['recordedAt' => gmdate(DATE_ATOM)];
-                });
+                }); }
+            catch (\Throwable) { Diagnostic::log(Diagnostic::forCode('RESPAWN_STORAGE_UNAVAILABLE','storage',$diagnostic['correlationId'])); }
             return ['state' => $diagnostic['outcome'], 'error' => $diagnostic];
         }
     }
@@ -96,7 +114,7 @@ final class Application
             throw new RuntimeException('PUBLICATION_SNAPSHOT_BINDING_INVALID');
         }
         $scope = self::scope($connectionId, $identity);
-        $publication = $this->store->update(static fn (array &$state): ?array => $state['localPublications'][$scope] ?? null);
+        $publication = $this->store->inspect(static fn (array $state): ?array => $state['localPublications'][$scope] ?? null);
         $blueprint = $publication['export'] ?? null;
         if (($publication['pbxId'] ?? '') !== $identity || ($publication['connectionId'] ?? '') !== $connectionId
             || !is_array($blueprint) || ($blueprint['sourcePbxId'] ?? '') !== $identity
@@ -143,6 +161,9 @@ final class Application
         if ($mode === 'provider' && is_array($this->settings['providerConfiguration'] ?? null)) {
             $publicConfig['providerConfiguration'] = $this->settings['providerConfiguration'];
         }
+        $existing=$this->store->inspect(static fn (array $state): ?array => $state['providerConnections'][$scope] ?? null);
+        if (($existing['connectionId'] ?? null)===$connectionId && ($existing['pbxId'] ?? null)===$identity
+            && ($existing['configuration'] ?? null)===$publicConfig) { return; }
         $this->store->update(function (array &$state) use ($connectionId, $identity, $scope, $publicConfig): void {
             $state['providerConnections'][$scope] = ['connectionId' => $connectionId, 'pbxId' => $identity,
                 'configuration' => $publicConfig, 'lastUsedAt' => gmdate(DATE_ATOM)];
@@ -172,7 +193,7 @@ final class Application
     private function providerFor(string $connectionId): Provider
     {
         if ($this->provider !== null && hash_equals($this->provider->connectionIdentity(), $connectionId)) { return $this->provider; }
-        $record = $this->store->update(function (array &$state) use ($connectionId): ?array {
+        $record = $this->store->inspect(function (array $state) use ($connectionId): ?array {
             foreach ($state['providerConnections'] ?? [] as $connection) {
                 if (($connection['connectionId'] ?? '') === $connectionId) { return $connection; }
             }
@@ -202,7 +223,7 @@ final class Application
     {
         $hash = $document['contentHash'];
         $scope = self::scope($connectionId, $identity);
-        $previous = $this->store->update(static fn (array &$state): ?array => $state['localPublications'][$scope]['ack'] ?? null);
+        $previous = $this->store->inspect(static fn (array $state): ?array => $state['localPublications'][$scope]['ack'] ?? null);
         if (!$force && ($previous['hash'] ?? '') === $hash) {
             return ['state' => 'unchanged', 'ack' => $previous];
         }
@@ -237,7 +258,7 @@ final class Application
             throw new RuntimeException('A stable idempotency key is required.');
         }
         $submissionId = self::submissionId($scope, $key);
-        $prior = $this->store->update(static function (array &$state) use ($submissionId): ?array {
+        $prior = $this->store->inspect(static function (array $state) use ($submissionId): ?array {
             return $state['submissions'][$submissionId]['originalRequest'] ?? null;
         });
         if ($prior !== null) { throw new RuntimeException('SUBMISSION_ALREADY_EXISTS_USE_RECONCILE_OR_EXPLICIT_RETRY'); }
@@ -280,7 +301,7 @@ final class Application
     private function reconcileSubmission(string $submissionId, string $identity): array
     {
         if (!preg_match('/^sub-[a-f0-9]{64}$/D', $submissionId)) { throw new RuntimeException('SUBMISSION_ID_INVALID'); }
-        $entry = $this->store->update(static fn (array &$state): ?array => $state['submissions'][$submissionId] ?? null);
+        $entry = $this->store->inspect(static fn (array $state): ?array => $state['submissions'][$submissionId] ?? null);
         if (!$entry || ($entry['pbxId'] ?? '') !== $identity || !isset($entry['connectionId'], $entry['originalRequest'])) {
             throw new RuntimeException('SUBMISSION_NOT_OWNED_OR_QUARANTINED');
         }
@@ -308,7 +329,7 @@ final class Application
     private function retrySubmission(string $submissionId, string $identity): array
     {
         if (!preg_match('/^sub-[a-f0-9]{64}$/D', $submissionId)) { throw new RuntimeException('SUBMISSION_ID_INVALID'); }
-        $entry = $this->store->update(static fn (array &$state): ?array => $state['submissions'][$submissionId] ?? null);
+        $entry = $this->store->inspect(static fn (array $state): ?array => $state['submissions'][$submissionId] ?? null);
         if (!$entry || ($entry['pbxId'] ?? '') !== $identity || !isset($entry['connectionId'], $entry['originalRequest'])) {
             throw new RuntimeException('SUBMISSION_NOT_OWNED_OR_QUARANTINED');
         }
@@ -341,12 +362,17 @@ final class Application
 
     private function localOnlyStatus(string $connectionId, string $identity, string $label): array
     {
-        return $this->statusWithFallback(null, $connectionId, $identity, $label);
+        $local = $this->localStatus($connectionId, $identity);
+        foreach ($local['operations'] as &$operation) { $operation['localKnowledge']='stale_provider_unavailable'; }
+        unset($operation);
+        $local['label'] = $label;
+        $local['providerStatus'] = 'unavailable_or_unverified';
+        return $local;
     }
 
     private function localStatus(string $connectionId, string $identity): array
     {
-        return $this->store->update(function (array &$state) use ($connectionId, $identity): array {
+        return $this->store->inspect(function (array $state) use ($connectionId, $identity): array {
             $connections = [];
             foreach ($state['providerConnections'] ?? [] as $record) {
                 if (($record['pbxId'] ?? '') !== $identity) { continue; }
@@ -408,7 +434,7 @@ final class Application
                         throw new RuntimeException('PROVIDER_OPERATION_IDENTITY_MISMATCH');
                     }
                     $key = $record['connectionId'] . ':' . $operation['operationId'];
-                    $previous = $this->store->update(static fn (array &$state): ?array => $state['operationRefs'][$key]['operation'] ?? null);
+                    $previous = $this->store->inspect(static fn (array $state): ?array => $state['operationRefs'][$key]['operation'] ?? null);
                     if ($previous !== null && ($operation['revision'] ?? 0) < ($previous['revision'] ?? 0)) {
                         $operation = $previous;
                         $operation['readinessAssessment'] = ['state' => 'invalid'];
@@ -480,7 +506,7 @@ final class Application
     {
         $id = $arguments['id'] ?? '';
         if (!is_string($id) || !preg_match('/^op-[a-zA-Z0-9._:-]{1,100}$/D', $id)) { throw new RuntimeException('OPERATION_ID_INVALID'); }
-        $reference = $this->store->update(function (array &$state) use ($id, $identity): ?array {
+        $reference = $this->store->inspect(function (array $state) use ($id, $identity): ?array {
             foreach ($state['operationRefs'] ?? [] as $entry) {
                 if (($entry['pbxId'] ?? '') === $identity && ($entry['operation']['operationId'] ?? '') === $id) { return $entry; }
             }
@@ -508,7 +534,7 @@ final class Application
 
     private function operationReference(string $connectionId, string $identity, string $operationId): ?array
     {
-        return $this->store->update(static function (array &$state) use ($connectionId, $identity, $operationId): ?array {
+        return $this->store->inspect(static function (array $state) use ($connectionId, $identity, $operationId): ?array {
             $reference = $state['operationRefs'][$connectionId . ':' . $operationId] ?? null;
             return $reference !== null && ($reference['pbxId'] ?? '') === $identity ? $reference['operation'] : null;
         });
@@ -516,7 +542,7 @@ final class Application
 
     private function assertNoUnresolvedOtherConnection(string $identity, string $connectionId, string $key): void
     {
-        $conflicts = $this->store->update(function (array &$state) use ($identity, $connectionId, $key): array {
+        $conflicts = $this->store->inspect(function (array $state) use ($identity, $connectionId, $key): array {
             $conflicts = [];
             foreach ($state['submissions'] ?? [] as $entry) {
                 if (($entry['pbxId'] ?? '') !== $identity || ($entry['connectionId'] ?? '') === $connectionId) { continue; }

@@ -10,6 +10,8 @@ php tests/corrective.php
 php tests/revisions.php
 php tests/revision-capacity.php
 php tests/storage-readonly.php
+php tests/storage-ownership.php
+php tests/freepbx-gui.php
 php tests/protection.php
 php tests/pond.php
 php tests/pond-ordering.php

@@ -83,6 +83,23 @@ dedicated trusted directories with restrictive ownership/permissions. Do not
 interpret these checks as protection against an untrusted owner or privileged
 local process.
 
+## Persistent State Ownership
+
+Ordinary Respawn journals, immutable chunks, locks and diagnostic logs inherit the
+owner/group of their private state directory, normally the FreePBX `asterisk`
+account. Atomic replacement creates a private temporary file, assigns the managed
+directory's owner/group before rename, and retains mode 0600; directories remain
+0700. Root-executed `fwconsole` writes therefore remain accessible to the web/cron
+service account. Read-only inspection uses shared locks and never repairs or
+rewrites ownership. Protected credential manifests, Pond master keys, recovery
+tokens and bundles are outside this state tree and are never included in repair.
+
+The explicit root-only `fwconsole respawn storage-repair` action is limited to the
+canonical configured `ASTVARLIBDIR/respawn` directory. It preflights known Respawn
+path patterns, rejects symlinks, hardlinks and unknown entries, locks the journal,
+preserves contents and restores restrictive modes. Stop scheduled/GUI writers
+before using it. It is not a general recursive ownership command.
+
 ## Reporting
 
 Do not create public issues containing credentials, customer identities or live

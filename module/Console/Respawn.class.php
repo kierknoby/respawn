@@ -12,7 +12,7 @@ class Respawn extends Command
     protected function configure()
     {
         $this->setName('respawn')->setDescription('Experimental Respawn configuration and operation controls')
-            ->addArgument('action', InputArgument::OPTIONAL, 'status, protection-status, protection-reconcile, verify, export, publish, blueprint, capabilities, respawn, operation, reconcile, reconcileSubmission, retrySubmission, cancel, teardown, activate, advance (mock only), plan, export-reconstruction, reconstruct', 'status')
+            ->addArgument('action', InputArgument::OPTIONAL, 'status, protection-status, protection-reconcile, storage-repair, verify, export, publish, blueprint, capabilities, respawn, operation, reconcile, reconcileSubmission, retrySubmission, cancel, teardown, activate, advance (mock only), plan, export-reconstruction, reconstruct', 'status')
             ->addArgument('area', InputArgument::OPTIONAL, 'firewall or blueprint', 'blueprint')
             ->addOption('force', null, InputOption::VALUE_NONE, 'Republish validated intent')
             ->addOption('id', null, InputOption::VALUE_REQUIRED, 'Operation ID')
@@ -35,7 +35,9 @@ class Respawn extends Command
     {
         try {
             $action = $input->getArgument('action');
-            if ($action === 'protection-reconcile') {
+            if ($action === 'storage-repair') {
+                $result = \FreePBX::Respawn()->repairStorageOwnership();
+            } elseif ($action === 'protection-reconcile') {
                 $result = \FreePBX::Respawn()->reconcileProtection();
             } elseif (in_array($action, ['protection-status','protection-health'], true)) {
                 $result = \FreePBX::Respawn()->protectionStatus();

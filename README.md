@@ -1,4 +1,4 @@
-# Respawn for FreePBX
+# Respawn for FreePBX 17
 
 Respawn is an experimental GPLv3+ FreePBX Connectivity module exploring rapid,
 on-demand reconstruction of a replacement PBX from a retained, validated
@@ -144,6 +144,15 @@ None of this is native revision-recovery evidence. The local simulation exercise
 additional behaviour but is not native FreePBX evidence.
 
 ## Development
+
+The FreePBX Connectivity page is organised as Overview, Protection, Revisions,
+Recovery and Settings. Detailed sanitised JSON remains expandable for diagnostics;
+view changes are server-rendered and do not trigger provider refreshes.
+
+Persistent Respawn state is owned by the FreePBX service account even when an
+administrator runs `fwconsole` as root. The root-only `storage-repair` command is
+restricted to validated Respawn files under `ASTVARLIBDIR/respawn`; credential
+files and Pond keys are deliberately outside that repair scope.
 
 The module targets FreePBX 17 and PHP 8.2+ conventions. It is experimental and
 has not been established as installable on a real FreePBX host. Do not install it

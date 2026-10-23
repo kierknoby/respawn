@@ -10,6 +10,108 @@ class Respawn extends \FreePBX_Helpers implements \BMO
         if ($freepbx === null) { throw new \RuntimeException('FreePBX container required.'); }
         $this->FreePBX = $freepbx;
     }
+
+    public function doConfigPageInit($page)
+    {
+        if ($page !== 'respawn') { return; }
+        $_SESSION['respawn_csrf'] ??= bin2hex(random_bytes(32));
+        $_SESSION['respawn_launch_key'] ??= bin2hex(random_bytes(24));
+        if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') { return; }
+        if (!defined('FREEPBX_IS_AUTH') || !FREEPBX_IS_AUTH || !isset($_SESSION['AMP_user'])
+            || !method_exists($_SESSION['AMP_user'], 'checkSection') || !$_SESSION['AMP_user']->checkSection('respawn')) {
+            http_response_code(403);
+            exit;
+        }
+        if ((int) ($_SERVER['CONTENT_LENGTH'] ?? 0) > 16384) { http_response_code(413); exit; }
+        if (!is_string($_POST['csrf'] ?? null) || !hash_equals($_SESSION['respawn_csrf'], $_POST['csrf'])) {
+            http_response_code(403);
+            exit('Request verification failed.');
+        }
+        $view = self::pageView($_POST['view'] ?? 'overview');
+        $feedback = ['view'=>$view, 'action'=>$_POST['action'] ?? '', 'result'=>null, 'error'=>null];
+        try { $feedback['result'] = $this->handlePageAction($_POST); }
+        catch (\Throwable $exception) {
+            $feedback['error'] = \Respawn\Diagnostic::forThrowable($exception, $_POST['action'] ?? 'operator');
+            \Respawn\Diagnostic::log($feedback['error']);
+        }
+        $_SESSION['respawn_page_feedback'] = $feedback;
+        $_SESSION['respawn_page_view'] = $view;
+        if (PHP_SAPI !== 'cli') {
+            header('Location: ' . self::pageRedirectLocation($view), true, 303);
+            exit;
+        }
+    }
+
+    public function consumePageFeedback(): ?array
+    {
+        $feedback = $_SESSION['respawn_page_feedback'] ?? null;
+        unset($_SESSION['respawn_page_feedback']);
+        return is_array($feedback) ? $feedback : null;
+    }
+
+    public static function pageView(mixed $view): string
+    {
+        return is_string($view) && in_array($view, ['overview','protection','revisions','recovery','settings'], true)
+            ? $view : 'overview';
+    }
+
+    public static function pageRedirectLocation(mixed $view): string
+    {
+        return '?display=respawn&view=' . rawurlencode(self::pageView($view));
+    }
+
+    private function handlePageAction(array $post): array
+    {
+        $action = $post['action'] ?? '';
+        if (!is_string($action)) { throw new \RuntimeException('OPERATOR_ACTION_INVALID'); }
+        if ($action === 'settings') {
+            $settings = $this->settings();
+            $this->saveSettings(['mode'=>$post['mode'] ?? '', 'identity'=>$settings['identity'] ?? '',
+                'intent'=>$post['intent'] ?? '', 'activationPolicy'=>$post['activationPolicy'] ?? '',
+                'groups'=>$post['groups'] ?? '', 'secretManifest'=>$post['secretManifest'] ?? '',
+                'protectionEnabled'=>isset($post['protectionEnabled']),
+                'protectionIntervalSeconds'=>(int) ($post['protectionIntervalSeconds'] ?? 300), 'providerConfiguration'=>[
+                    'schema'=>'respawn.provider-config.v1', 'adapterId'=>'https-json-v1',
+                    'endpoint'=>$post['endpoint'] ?? '', 'credentialRef'=>$post['credentialRef'] ?? '',
+                    'sourcePbxId'=>$settings['identity'] ?? '', 'allowedHosts'=>[$post['allowedHost'] ?? '']]]);
+            return ['state'=>'local settings saved; no external action requested'];
+        }
+        if ($action === 'revision-capture') { return $this->captureLocalRevision('manual_capture'); }
+        if ($action === 'revision-plan') {
+            $plan = $this->planLocalAction((string) ($post['localAction'] ?? ''), (string) ($post['revisionId'] ?? ''));
+            $_SESSION['respawn_revision_plan'] = $plan['planId'];
+            return $plan;
+        }
+        if ($action === 'revision-execute') {
+            $planId = $post['planId'] ?? '';
+            if (!is_string($planId) || !hash_equals((string) ($_SESSION['respawn_revision_plan'] ?? ''), $planId)) {
+                throw new \RuntimeException('DESIRED_STATE_PLAN_SESSION_MISMATCH');
+            }
+            $result = $this->executeLocalPlan($planId, (string) ($post['confirmation'] ?? ''));
+            unset($_SESSION['respawn_revision_plan']);
+            return $result;
+        }
+        if ($action === 'revision-compare') {
+            return $this->compareLocalRevisions((string) ($post['fromRevision'] ?? ''), (string) ($post['toRevision'] ?? ''));
+        }
+        if ($action === 'refresh-status') {
+            $result = $this->application()->runSafely('status');
+            $this->syncLocalRevisionPins($result['operations'] ?? []);
+            return $result;
+        }
+        if ($action === 'protection-reconcile') { return $this->reconcileProtection(); }
+        if ($action === 'protection-resume') {
+            return $this->resumeProtection((string) ($post['revisionId'] ?? ''), (string) ($post['confirmation'] ?? ''));
+        }
+        $result = (new \Respawn\OperatorController())->handle($this->application(),
+            (string) ($this->settings()['identity'] ?? ''), (string) ($this->settings()['identity'] ?? ''),
+            $post + ['csrf'=>$_SESSION['respawn_csrf']], $_SESSION['respawn_csrf'], (int) ($_SERVER['CONTENT_LENGTH'] ?? 0));
+        if ($action === 'publish' && isset($result['ack'])) { $this->recordPublicationRevision($result['ack']); }
+        if (isset($result['operationId']) && in_array($action,['respawn','operation','cancel','teardown','activate','advance'],true)) {
+            $this->syncLocalRevisionPins([$result]);
+        }
+        return $result;
+    }
     public function install()
     {
         if (!$this->getConfig('settings')) {
@@ -144,7 +246,7 @@ class Respawn extends \FreePBX_Helpers implements \BMO
             $enabled = ($settings['protectionEnabled'] ?? false) === true;
             $directory = $this->FreePBX->Config->get('ASTVARLIBDIR') . '/respawn';
             $record = (new \Respawn\Storage\JsonStateStore($directory))
-                ->update(static fn (array &$state): array => $state['protection'][$settings['identity']] ?? []);
+                ->inspect(static fn (array $state): array => $state['protection'][$settings['identity']] ?? []);
             $status = \Respawn\Protection\ProtectionReconciler::formatStatus($record, $enabled);
             if ($enabled) {
                 try {
@@ -161,6 +263,22 @@ class Respawn extends \FreePBX_Helpers implements \BMO
                 }
             }
             return $status;
+        }
+
+        public function assertStorageAccessible(): void
+        {
+            $root = rtrim((string) $this->FreePBX->Config->get('ASTVARLIBDIR'), '/') . '/respawn';
+            (new \Respawn\Storage\JsonStateStore($root))->inspect(static fn (array $state): null => null);
+            (new \Respawn\Storage\JsonStateStore($root . '/revision-cache'))->inspect(static fn (array $state): null => null);
+        }
+
+        public function repairStorageOwnership(): array
+        {
+            $varlib = rtrim((string) $this->FreePBX->Config->get('ASTVARLIBDIR'), '/');
+            if ($varlib === '' || !str_starts_with($varlib, '/') || is_link($varlib) || realpath($varlib) !== $varlib) {
+                throw new \RuntimeException('RESPAWN_STORAGE_REPAIR_PATH_INVALID');
+            }
+            return \Respawn\Storage\JsonStateStore::repairOwnership($varlib . '/respawn', $varlib);
         }
 
         public function reconcileProtection(?int $now = null): array
@@ -285,31 +403,12 @@ class Respawn extends \FreePBX_Helpers implements \BMO
 
         private function assertNoConflictingProviderOperation(string $identity): void
         {
-            $state = (new \Respawn\Storage\JsonStateStore($this->FreePBX->Config->get('ASTVARLIBDIR') . '/respawn'))
-                ->update(static fn (array &$state): array => $state);
-            foreach ($state['submissions'] ?? [] as $submission) {
-                if (($submission['pbxId'] ?? '') !== $identity) { continue; }
-                if (in_array($submission['state'] ?? '', ['submitted_outcome_unknown','launch_outcome_unknown'], true)) {
-                    throw new \RuntimeException('PROVIDER_RECONCILIATION_REQUIRED');
-                }
-            }
-            foreach ($state['operationRefs'] ?? [] as $reference) {
-                if (($reference['pbxId'] ?? '') !== $identity) { continue; }
-                if (!in_array($reference['operation']['state'] ?? '', ['torn_down','rolled_back'], true)) {
-                    throw new \RuntimeException('PROVIDER_RECONCILIATION_REQUIRED');
-                }
-            }
+            $this->assertRecoveryConflictsClear($identity);
         }
 
         private function providerRevisionDiffers(string $identity, string $revisionHash): bool
         {
-            $connectionId = ($this->settings()['providerConfiguration'] ?? null) !== null
-                ? \Respawn\Provider\ConnectionIdentity::forConfiguration($this->settings()['providerConfiguration'])
-                : \Respawn\Provider\ConnectionIdentity::forConfiguration([], $this->settings()['mode'] ?? 'disabled');
-            $scope = hash('sha256', $connectionId . "\0" . $identity);
-            $entry = (new \Respawn\Storage\JsonStateStore($this->FreePBX->Config->get('ASTVARLIBDIR') . '/respawn'))
-                ->update(static fn (array &$state): ?array => $state['localPublications'][$scope]['ack'] ?? null);
-            return $entry !== null && ($entry['hash'] ?? '') !== $revisionHash;
+            return $this->publicationDiffersFromRevision($identity, $revisionHash);
         }
 
     public function saveSettings(array $settings): void
@@ -372,4 +471,34 @@ class Respawn extends \FreePBX_Helpers implements \BMO
         return new \Respawn\Application($settings, new \Respawn\Storage\JsonStateStore($directory),
             $firewall, $provider, $exporter, $resolver);
     }
+
+        public function assertRecoveryConflictsClear(string $identity): void
+        {
+            $state=(new \Respawn\Storage\JsonStateStore($this->FreePBX->Config->get('ASTVARLIBDIR') . '/respawn'))
+                ->inspect(static fn (array $state): array => $state);
+            foreach ($state['submissions'] ?? [] as $submission) {
+                if (($submission['pbxId'] ?? '') === $identity
+                    && in_array($submission['state'] ?? '', ['submitted_outcome_unknown','launch_outcome_unknown'], true)) {
+                    throw new \RuntimeException('PROVIDER_RECONCILIATION_REQUIRED');
+                }
+            }
+            foreach ($state['operationRefs'] ?? [] as $reference) {
+                if (($reference['pbxId'] ?? '') === $identity
+                    && !in_array($reference['operation']['state'] ?? '', ['torn_down','rolled_back'], true)) {
+                    throw new \RuntimeException('PROVIDER_RECONCILIATION_REQUIRED');
+                }
+            }
+        }
+
+        public function publicationDiffersFromRevision(string $identity, string $revisionHash): bool
+        {
+            $settings=$this->settings();
+            $connectionId=($settings['mode'] ?? 'disabled') === 'provider' && is_array($settings['providerConfiguration'] ?? null)
+                ? \Respawn\Provider\ConnectionIdentity::forConfiguration($settings['providerConfiguration'])
+                : \Respawn\Provider\ConnectionIdentity::forConfiguration([], $settings['mode'] ?? 'disabled');
+            $scope=hash('sha256',$connectionId . "\0" . $identity);
+            $entry=(new \Respawn\Storage\JsonStateStore($this->FreePBX->Config->get('ASTVARLIBDIR') . '/respawn'))
+                ->inspect(static fn (array $state): ?array => $state['localPublications'][$scope]['ack'] ?? null);
+            return $entry !== null && ($entry['hash'] ?? '') !== $revisionHash;
+        }
 }

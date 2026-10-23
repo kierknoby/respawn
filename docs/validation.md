@@ -1,5 +1,104 @@
 # Local Validation Results
 
+## Persistent Storage Ownership Correction (23 October 2026)
+
+Source correction adds service-directory owner/group inheritance for new state
+directories, state/build locks, atomic temporary files, journal replacements,
+chunk directories/files and diagnostic logs. Root-created replacements are
+chowned to the existing Respawn state-directory owner before rename; modes remain
+0700 for directories and 0600 for files. Read-only disabled CLI status now uses
+the shared-lock path without connection-registration writes. Repeated provider
+registration checks current state before opening a write transaction. Provider
+response operation updates remain genuine mutations.
+
+`fwconsole respawn storage-repair` is root-only and has no path option. It is
+bound to the canonical configured `ASTVARLIBDIR/respawn`, derives service
+ownership from its parent, locks state/diagnostic writers, preflights all entries,
+rejects symlinks/hardlinks/unexpected filenames and preserves contents while
+restoring restrictive modes. It never enters secret-manifest, Pond-key, token or
+recovery-bundle locations. The GUI checks both journals through `inspect()` before
+rendering; inaccessible/corrupt storage returns a sanitized diagnostic rather than
+an unhandled filesystem warning. CLI error logging remains payload-free.
+
+`tests/storage-ownership.php` covers restrictive permissions, inaccessible-state
+failure preservation and symlink-path rejection. When run with root and a local
+service account, it additionally tests root initialization/publication, service
+account read/update, subsequent root update, immutable chunks, scoped repair and
+data preservation. After the correction, `php tests/storage-ownership.php`,
+`php tests/freepbx-gui.php`, `sh tools/check.sh` and `XDEBUG_MODE=off php
+tools/demo.php` ran successfully. The complete gate passed 97 checks and 41
+reconstruction invariants. The root-to-service branch explicitly skipped because
+the runner is non-root; the live FreePBX procedure below remains required.
+Browser checks were skipped for missing `libatk-1.0.so.0`.
+
+Source review further confirms the earlier root-write path: `Application::run()`
+called `registerConnection()` for every command, which used `JsonStateStore::update()`.
+Root-run `fwconsole respawn status` could therefore atomically replace `state.json`
+with a root-owned temporary file. The earlier installed `protectionStatus()` also
+used `update()` as a read; the current source uses `inspect()`. The live stack only
+shows the later GUI read failing and cannot alone prove which command performed
+the earlier ownership change. Root-run state-changing commands were also covered
+by the atomic ownership correction.
+
+The dedicated ownership test now simulates root-to-service writes and service
+read/update if executed with root privileges and a local `nobody` account. It also
+checks root-equivalent publication/status, chunk ownership, symlink rejection,
+permission failure preservation, repair refusal for unexpected files and state
+preservation. Its root-to-service portion requires root privileges and was
+explicitly skipped here. A real server must still verify that `ASTVARLIBDIR` is
+owned by the intended FreePBX service account, execute the repair procedure only
+if needed, run CLI checks as root and `asterisk`, and load the GUI again.
+
+## FreePBX GUI Correction Pass (23 October 2026)
+
+Added the BMO `doConfigPageInit($page)` lifecycle hook for the Respawn page. It
+initialises the existing session CSRF/launch keys, checks the FreePBX Respawn
+section permission, enforces request-size/CSRF limits, dispatches each POST once,
+stores one-time feedback and redirects with 303 to a fixed local view (PRG). The
+render file is GET-only. The browser refresh path no longer repeats a submitted
+action. The previously operator-reported FreePBX 17 warning and successful 43-file
+installation are recorded separately above; this source update has not yet been
+reinstalled on that server.
+
+The page now uses server-rendered Overview, Protection, Revisions, Recovery and
+Settings views, with expandable sanitised diagnostics. Cached GET status uses
+`Application::cachedStatus()`/`JsonStateStore::inspect()`; provider queries remain
+explicit refresh actions. `protectionStatus`, recovery-conflict inspection and
+publication-difference checks are read-only. Revision rows provide Revert and
+Regenerate previews; unsupported native mutations remain disabled by the existing
+target capability checks. Disabled-provider recovery rejection reports that no
+operation was submitted rather than an ambiguous outcome-unknown message.
+
+`php tests/freepbx-gui.php` covers BMO signature/lifecycle, one-time POST
+dispatch, view-preserving PRG target, section authorization, CSRF, request size,
+disabled-provider rejection, action availability and byte-identical state after
+repeated protection/conflict/publication/cached-status reads. It renders all five
+views with minimal FreePBX doubles, checking headings/CSRF forms without browser
+runtime. Full `sh tools/check.sh` and the synthetic demo pass; 97 application /
+provider checks and 41 reconstruction invariants pass. Browser and live FreePBX
+rendering, Bootstrap behavior on the installed host, keyboard/mobile screenshots
+remain unverified because Chromium lacks `libatk-1.0.so.0`. The updated module
+must be installed and exercised on the reported FreePBX development host before
+claiming the original warning is fixed there.
+
+## First FreePBX Installation (User-Reported, 23 October 2026)
+
+The operator reports installation on a real FreePBX 17 development server. The
+reported checks are: all 43 module files matched an independently reviewed source
+fingerprint; `fwconsole ma install respawn` completed; Respawn is enabled and
+recognised; `fwconsole chown` and `fwconsole reload` completed; `fwconsole respawn
+status` and `fwconsole respawn protection-status` returned valid state; and the
+GUI rendered configuration, protection, revision and recovery controls. The GUI
+reported `Page Respawn doesn't implement doConfigPageInit, this is bad.` This is
+operator-provided evidence, not independently reproduced in this checkout. It
+establishes installation/rendering only, not cron execution, automatic protection,
+Pond connectivity, native reconstruction, SIP registration or calls.
+
+The current source adds BMO page initialization, POST/Redirect/GET, cached GET
+rendering, the five server-rendered Overview/Protection/Revisions/Recovery/Settings
+views and expandable sanitised diagnostics. The update itself has **not** been
+reinstalled or rechecked on that FreePBX host; that is the next integration step.
+
 ## Independent Audit Correction Pass (23 October 2026)
 
 F1-F6 are reconciled in [the disposition report](pre-test-review.md). Version

@@ -437,10 +437,12 @@ final class ProtectionReconciler
         $started = strtotime($record['lastInvocationStartedAt'] ?? '') ?: 0;
         $scheduler = $completed === 0 ? 'never_observed' : ($now - $completed > 180 ? 'missed' : 'recent');
         if ($started > $completed && $now - $started > 120) { $scheduler = 'stalled'; }
+        $latestVerified = $record['outbox'][$record['latestVerifiedRevisionId'] ?? ''] ?? [];
         return ['enabled' => $enabled, 'state' => self::deriveState($record, $now),
             'schedulerState'=>$scheduler, 'lastInvocationStartedAt'=>$record['lastInvocationStartedAt'] ?? null,
             'lastInvocationCompletedAt'=>$record['lastInvocationCompletedAt'] ?? null,
             'lastSuccessfulReconciliationAt'=>$record['lastSuccessfulReconciliationAt'] ?? null,
+            'lastSuccessfulPublicationAt'=>$latestVerified['verifiedAt'] ?? null,
             'lastRecoveryAt'=>$record['lastRecoveryAt'] ?? null, 'failureStage'=>$record['failureStage'] ?? null,
             'lastCheckStartedAt' => $record['lastCheckStartedAt'] ?? null,
             'lastCheckCompletedAt' => $record['lastCheckCompletedAt'] ?? null,

@@ -69,12 +69,61 @@ php /opt/respawn-pond/tools/preflight.php --role=recovery --token=/private/respa
 ```
 
 Adjust only host-confirmed paths. Source checks must run as `asterisk` under the
-same PHP CLI environment as cron: PHP 8.2+, cURL/PDO MySQL, readable FreePBX config
+same PHP CLI environment as cron: PHP 8.2+, cURL/PDO MySQL/POSIX ownership
+functions, readable FreePBX config
 and executable `/usr/sbin/fwconsole`. Pond needs PDO SQLite and OpenSSL AES-GCM;
 recovery needs cURL. JSON/hash/filter and fsync/flock are checked too. Extension
 versions follow the PHP build; no narrower vendor range is certified. Preflight
 prints versions/booleans, writes nothing and makes no network calls. Its
 `schedulerExecutionProven: false` is intentional: installed cron is not execution.
+
+## Mixed-User Respawn Storage
+
+The state directory and ordinary journals/chunks/locks/logs must be owned by the
+owner/group of the configured `ASTVARLIBDIR` parent, normally `asterisk:asterisk`.
+Run cron as `asterisk`; root-run `fwconsole` commands preserve this owner during
+atomic journal replacement and chunk/lock creation. Root-side storage mutations
+are restricted to the fixed `ASTVARLIBDIR/respawn` tree. The repair command never
+touches secret manifests, Pond keys, recovery tokens or arbitrary paths.
+
+If Respawn reports `RESPAWN_STORAGE_UNAVAILABLE`, stop the scheduled reconciliation
+and avoid concurrent GUI/CLI writes. As the FreePBX administrator, first inspect:
+
+```sh
+stat -c '%U:%G %a %n' /var/lib/asterisk /var/lib/asterisk/respawn /var/lib/asterisk/respawn/state.json /var/lib/asterisk/respawn/state.lock
+find /var/lib/asterisk/respawn -maxdepth 3 -printf '%y %u:%g %m %p\n'
+```
+
+Confirm the paths are the configured Respawn data root and its managed files;
+preserve a private backup of the complete tree. Do **not** delete `state.json`,
+reset PBX identity, use recursive shell `chown`, or touch paths outside Respawn.
+Then run the constrained repair as root:
+
+```sh
+fwconsole respawn storage-repair
+```
+
+It requires root, derives the service uid/gid from the canonical `ASTVARLIBDIR`
+parent, takes Respawn state/diagnostic locks, validates the entire tree against
+known journal/chunk/lock/log names, rejects symlinks/hard links/unexpected files,
+and only then restores owner/group and modes 0700 (directories)/0600 (files).
+It preserves file contents and prints the repaired entry count and service IDs.
+If preflight rejects a path, stop and retain evidence for review; do not expand
+the allowlist to customer or credential files. The repair is repeatable if an
+OS ownership operation is interrupted. Afterward verify:
+
+```sh
+stat -c '%U:%G %a %n' /var/lib/asterisk/respawn /var/lib/asterisk/respawn/state.json /var/lib/asterisk/respawn/state.lock
+runuser -u asterisk -- fwconsole respawn status
+runuser -u asterisk -- fwconsole respawn protection-status
+fwconsole respawn status
+```
+
+The first service-account write/read verifies subsequent GUI accessibility; the
+final root status must not change state-file ownership. Repeat a GUI page load and
+revision-list check, then resume cron. Capture checksums/revision heads before and
+after repair and require them unchanged. Root-only repair is a recovery action,
+not a routine scheduler step.
 
 The independent implementation is now `pond/`, not the Development Pond.
 Deploy **Server B** using [the standalone runbook](../pond/README.md), its actual
@@ -242,6 +291,18 @@ provision. Protection enablement requires provider mode and a valid HTTPS provid
 configuration; do not enable it with a fixture or nonexistent endpoint.
 
 ## Source Configuration
+
+In the FreePBX Connectivity menu, open **Respawn**. **Overview** is the default
+dashboard; **Protection** shows Puddle, Stream and Pond state; **Settings** holds
+provider, supported-scope, secret-manifest, schedule and recovery policy controls;
+**Revisions** provides capture, history, comparison and Revert/Regenerate
+previews; **Recovery** shows eligibility, submissions and provider operations.
+Provider refresh is explicit in Overview/Recovery and never occurs on ordinary
+view navigation. Detailed sanitised JSON remains under **Sanitised diagnostics**.
+Settings and actions use POST with session CSRF protection and return to the
+submitted view; operation confirmation requirements remain in force. Native
+Revert/Regenerate execution stays disabled when update/removal/apply capabilities
+are unavailable.
 
 On the source only, create two fixed PJSIP extensions with matching no-voicemail
 Core users: 1001 and 1002. Use the supported profile in
