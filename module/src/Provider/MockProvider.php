@@ -13,7 +13,7 @@ use Respawn\Reconstruction\SecretResolver;
 use Respawn\Storage\JsonStateStore;
 use RuntimeException;
 
-final class MockProvider implements Provider
+final class MockProvider implements Provider, RetainedBlueprintProvider
 {
     private const STAGES = ['accepted', 'provisioning', 'configuration', 'connectivity', 'routing_prepared', 'ready'];
 
@@ -67,6 +67,55 @@ final class MockProvider implements Provider
             return ['mode' => 'MOCK', 'state' => 'acknowledged', 'ack' => $entry['ack']];
         });
     }
+
+    public function retainRevision(string $pbxId, array $blueprint, string $revisionId, string $idempotencyKey): array
+    {
+        $this->available();
+        $this->bind($pbxId);
+        Blueprint::verifyHash($blueprint);
+        Blueprint::ordered($blueprint);
+        if (($blueprint['sourcePbxId'] ?? '') !== $pbxId
+            || !preg_match('/^rev-[a-f0-9]{32}$/D', $revisionId)
+            || !preg_match('/^[a-f0-9]{64}$/D', $idempotencyKey)) {
+            throw new RuntimeException('PROTECTION_PUBLICATION_BINDING_INVALID');
+        }
+        return $this->store->update(function (array &$state) use ($pbxId, $blueprint, $revisionId, $idempotencyKey): array {
+            $entry = &$state['retainedBlueprints'][$this->connection][$pbxId][$revisionId];
+            if (isset($entry) && ($entry['contentHash'] ?? '') !== $blueprint['contentHash']) {
+                throw new RuntimeException('PROTECTION_REVISION_ID_CONFLICT');
+            }
+            if (!isset($entry)) {
+                $version = (int) ($state['retainedBlueprintVersions'][$this->connection][$pbxId] ?? 0) + 1;
+                $publicationId = 'pub-' . substr(hash('sha256', $this->connection . "\0" . $pbxId . "\0" . $revisionId), 0, 32);
+                $entry = ['blueprint' => $blueprint, 'contentHash' => $blueprint['contentHash'],
+                    'idempotencyKey' => $idempotencyKey, 'publicationId' => $publicationId,
+                    'version' => $version, 'retainedAt' => gmdate(DATE_ATOM)];
+                $state['retainedBlueprintVersions'][$this->connection][$pbxId] = $version;
+            } elseif (($entry['idempotencyKey'] ?? '') !== $idempotencyKey) {
+                throw new RuntimeException('PROTECTION_IDEMPOTENCY_CONFLICT');
+            }
+            $ack = ['pbxId' => $pbxId, 'connectionId' => $this->connection, 'revisionId' => $revisionId,
+                'blueprintId' => 'bp-' . substr($blueprint['contentHash'], 0, 24), 'publicationId' => $entry['publicationId'],
+                'idempotencyKey' => $idempotencyKey, 'version' => $entry['version'], 'hash' => $blueprint['contentHash'],
+                'retentionReceipt' => 'mock-retained:' . $entry['publicationId'], 'mode' => 'SIMULATED'];
+            $entry['acknowledgement'] = $ack;
+            return ['state' => 'durably_retained', 'ack' => $ack];
+        });
+    }
+
+    public function retrieveRevision(string $pbxId, string $revisionId): array
+    {
+        $this->available();
+        $this->bind($pbxId);
+        $connection = $this->connection;
+        $entry = $this->store->update(static fn (array &$state): ?array =>
+            $state['retainedBlueprints'][$connection][$pbxId][$revisionId] ?? null);
+        if (!is_array($entry)) { throw new RuntimeException('PROTECTION_RETAINED_REVISION_NOT_FOUND'); }
+        return ['pbxId' => $pbxId, 'connectionId' => $this->connection, 'revisionId' => $revisionId,
+            'publicationId' => $entry['publicationId'], 'blueprint' => $entry['blueprint'], 'mode' => 'SIMULATED'];
+    }
+
+    public function retentionEvidenceMode(): string { return 'SIMULATED'; }
 
     public function launch(array $request): array
     {

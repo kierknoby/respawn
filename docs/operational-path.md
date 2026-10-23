@@ -4,6 +4,15 @@ The goal is takeover in minutes. **No real takeover or timing has been measured.
 All live tests need separate explicit authorisation. No live infrastructure was
 modified during this scaffold work. Mock lifecycle completion is not this goal.
 
+Respawn explores an alternative to maintaining a second PBX as a continuously
+ready warm spare: retain validated supported configuration and deploy a
+replacement when required. The intended objective is to make warm-spare operation
+unnecessary for suitable deployments, but only after the complete recovery chain
+and its timing have been proven. Revert and Regenerate concern retained local
+configuration; Respawn requests provider-controlled replacement and routing work.
+These operations are not interchangeable, and configuration readiness alone is
+not completed recovery.
+
 | Stage | Private service must implement / supply | Blocking evidence and dependencies |
 | --- | --- | --- |
 | Authorise | Bind operator, source PBX, retained blueprint and service entitlement; return operation receipt and stable lookup | Approved identity/enrolment mechanism, permissions, blueprint retention/freshness, idempotency scope |

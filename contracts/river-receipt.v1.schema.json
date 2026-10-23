@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://respawn.in1.click/contracts/river-receipt.v1.schema.json",
+  "title": "Respawn River Replica Receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "state", "federationId", "transactionId", "idempotencyKey", "senderPondId", "recipientPondId", "tenantId", "sourcePbxId", "revisionId", "contentHash", "replicaId", "retainedAt", "mode"],
+  "properties": {
+    "schema": {"const": "respawn.river-receipt.v1"},
+    "state": {"enum": ["durably_retained", "durably_retained_simulated"]},
+    "federationId": {"type": "string", "pattern": "^[a-zA-Z0-9._:-]{1,128}$"},
+    "transactionId": {"type": "string", "pattern": "^[a-zA-Z0-9._:-]{1,128}$"},
+    "idempotencyKey": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "senderPondId": {"type": "string", "pattern": "^[a-zA-Z0-9._:-]{1,128}$"},
+    "recipientPondId": {"type": "string", "pattern": "^[a-zA-Z0-9._:-]{1,128}$"},
+    "tenantId": {"type": "string", "pattern": "^[a-zA-Z0-9._:-]{1,128}$"},
+    "sourcePbxId": {"type": "string", "pattern": "^[a-zA-Z0-9._-]{1,80}$"},
+    "revisionId": {"type": "string", "pattern": "^rev-[a-f0-9]{32}$"},
+    "parentRevisionId": {"type": ["string", "null"], "pattern": "^rev-[a-f0-9]{32}$"},
+    "contentHash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "replicaId": {"type": "string", "pattern": "^[a-zA-Z0-9._:-]{1,128}$"},
+    "retainedAt": {"type": "string", "format": "date-time"},
+    "mode": {"enum": ["EXTERNAL", "SIMULATED"]},
+    "retentionUntil": {"type": "string", "format": "date-time"},
+    "signatureRef": {"type": "string", "pattern": "^[a-zA-Z0-9._:/-]{1,256}$"}
+  }
+}

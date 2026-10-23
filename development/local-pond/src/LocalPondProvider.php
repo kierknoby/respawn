@@ -4,10 +4,11 @@ declare(strict_types=1);
 namespace Respawn\LocalPond;
 
 use Respawn\Provider\Provider;
+use Respawn\Provider\RetainedBlueprintProvider;
 use Respawn\Reconstruction\Blueprint;
 use RuntimeException;
 
-final class LocalPondProvider implements Provider
+final class LocalPondProvider implements Provider, RetainedBlueprintProvider
 {
     private string $connectionId;
     private bool $dropNextLaunchResponse;
@@ -64,6 +65,42 @@ final class LocalPondProvider implements Provider
         }
         return ['state' => 'acknowledged', 'ack' => $ack];
     }
+
+    public function retainRevision(string $pbxId, array $blueprint, string $revisionId, string $idempotencyKey): array
+    {
+        if ($pbxId !== $this->configuration['sourcePbxId']) { throw new RuntimeException('PROVIDER_RETENTION_REQUEST_INVALID'); }
+        Blueprint::verifyHash($blueprint);
+        Blueprint::ordered($blueprint);
+        $result = $this->call('retainRevision', ['pbxId' => $pbxId, 'revisionId' => $revisionId,
+            'contentHash' => $blueprint['contentHash'], 'payload' => $blueprint, 'idempotencyKey' => $idempotencyKey]);
+        $ack = $result['ack'] ?? null;
+        if (($result['state'] ?? '') !== 'durably_retained' || !is_array($ack)
+            || ($ack['pbxId'] ?? '') !== $pbxId || ($ack['connectionId'] ?? '') !== $this->connectionId
+            || ($ack['revisionId'] ?? '') !== $revisionId || ($ack['hash'] ?? '') !== $blueprint['contentHash']
+            || !is_string($ack['publicationId'] ?? null) || !is_string($ack['retentionReceipt'] ?? null)
+            || ($ack['idempotencyKey'] ?? '') !== $idempotencyKey
+            || !is_int($ack['version'] ?? null) || $ack['version'] < 1) {
+            throw new RuntimeException('PROVIDER_DURABLE_ACK_INVALID');
+        }
+        return ['state' => 'durably_retained', 'ack' => $ack];
+    }
+
+    public function retrieveRevision(string $pbxId, string $revisionId): array
+    {
+        if ($pbxId !== $this->configuration['sourcePbxId']) { throw new RuntimeException('PROVIDER_RETRIEVAL_REQUEST_INVALID'); }
+        $result = $this->call('retrieveRevision', ['pbxId' => $pbxId, 'revisionId' => $revisionId]);
+        $blueprint = $result['blueprint'] ?? null;
+        if (($result['state'] ?? '') !== 'retained' || ($result['pbxId'] ?? '') !== $pbxId
+            || ($result['connectionId'] ?? '') !== $this->connectionId || ($result['revisionId'] ?? '') !== $revisionId
+            || !is_string($result['publicationId'] ?? null) || !is_array($blueprint)) {
+            throw new RuntimeException('PROVIDER_RETRIEVAL_BINDING_INVALID');
+        }
+        Blueprint::verifyHash($blueprint);
+        return ['pbxId' => $pbxId, 'connectionId' => $this->connectionId, 'revisionId' => $revisionId,
+            'publicationId' => $result['publicationId'], 'blueprint' => $blueprint, 'mode' => 'SIMULATED'];
+    }
+
+    public function retentionEvidenceMode(): string { return 'SIMULATED'; }
 
     public function launch(array $request): array
     {

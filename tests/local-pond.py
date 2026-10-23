@@ -6,6 +6,8 @@ from pathlib import Path
 import re
 import socket
 import subprocess
+import sys
+import hashlib
 import tempfile
 import time
 from urllib.error import HTTPError, URLError
@@ -92,8 +94,11 @@ class Demo:
             'method': method, 'pbxId': pbx, 'parameters': parameters}
         request = Request(f'http://127.0.0.1:{self.pond_port}{path}', data=json.dumps(envelope).encode(), headers={
             'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token})
-        with self.http.open(request, timeout=5) as response:
-            return json.loads(response.read())['result']
+        try:
+            with self.http.open(request, timeout=5) as response:
+                return json.loads(response.read())['result']
+        except HTTPError as error:
+            raise AssertionError(f'{method} RPC failed: HTTP {error.code}: {error.read().decode(errors="replace")}') from error
 
     def rejected_rpc(self, envelope, token):
         request = Request(f'http://127.0.0.1:{self.pond_port}/rpc', data=json.dumps(envelope).encode(), headers={
@@ -139,6 +144,22 @@ def verify_loopback_contract(demo):
         + '} catch (RuntimeException $e) { exit(0); }')
     result = subprocess.run(['php', '-r', code], cwd=ROOT, capture_output=True)
     assert result.returncode == 0, result.stderr.decode(errors='replace')
+    export_code = ('require ' + repr(str(LOCAL / 'bootstrap.php')) + '; $service = new \\Respawn\\LocalPond\\LocalRecoveryService('
+        + 'getenv("RESPAWN_LOCAL_DEMO_ROOT"), "pbx-alpha"); echo json_encode($service->exportBlueprint(), JSON_THROW_ON_ERROR);')
+    exported = subprocess.run(['php', '-r', export_code], cwd=ROOT,
+        env=dict(os.environ, RESPAWN_LOCAL_DEMO_ROOT=str(demo.root)), capture_output=True)
+    assert exported.returncode == 0, exported.stderr.decode(errors='replace')
+    blueprint = json.loads(exported.stdout)
+    revision_id = 'rev-' + 'd' * 32
+    idempotency_key = hashlib.sha256(('pbx-alpha:' + revision_id + ':' + blueprint['contentHash']).encode()).hexdigest()
+    retained = demo.rpc('retainRevision', 'pbx-alpha', 'primary', {
+        'pbxId': 'pbx-alpha', 'revisionId': revision_id, 'contentHash': blueprint['contentHash'],
+        'payload': blueprint, 'idempotencyKey': idempotency_key})
+    assert retained['state'] == 'durably_retained' and retained['ack']['revisionId'] == revision_id
+    assert retained['ack']['hash'] == blueprint['contentHash'] and retained['ack']['mode'] == 'SIMULATED'
+    recovered = demo.rpc('retrieveRevision', 'pbx-alpha', 'primary', {'pbxId': 'pbx-alpha', 'revisionId': revision_id})
+    assert recovered['blueprint'] == blueprint and recovered['publicationId'] == retained['ack']['publicationId']
+    print('PASS: authenticated Local Pond retain/retrieve returns the exact revision (SIMULATED; not external storage)')
     print('PASS: loopback-only configuration, bearer enrolment, endpoint-bound connection ID and strict v2 parameters')
 
 
@@ -268,9 +289,7 @@ def browser_happy_path(demo):
 
 
 def main():
-    test_parent = ROOT / 'build/local-demo-tests'
-    test_parent.mkdir(parents=True, exist_ok=True)
-    root = Path(tempfile.mkdtemp(prefix='integration-', dir=test_parent))
+    root = Path(tempfile.mkdtemp(prefix='respawn-local-demo-integration-'))
     os.chmod(root, 0o700)
     pond_port = free_port()
     dashboard_port = free_port([pond_port])
@@ -284,6 +303,8 @@ def main():
         assert initial['capabilities']['authorised'] is True
         assert 'reconstruction.v2' in initial['capabilities']['capabilities']
         verify_loopback_contract(demo)
+        if '--contracts-only' in sys.argv:
+            return
         browser_happy_path(demo)
 
         alpha, state = demo.operation(pbx='pbx-alpha')

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import functools
 import http.server
+from html.parser import HTMLParser
 import json
 import os
 from pathlib import Path
@@ -16,6 +17,14 @@ OUT = ROOT / 'artifacts/screenshots'
 OUT.mkdir(parents=True, exist_ok=True)
 pages = json.loads((ROOT / 'website/pages.json').read_text())
 results = []
+home_copy = ' '.join([pages['index']['intro'], pages['index']['description']]
+    + [heading + ' ' + body for heading, body in pages['index']['sections']])
+assert 'warm spare' in home_copy.lower()
+assert all(operation in home_copy for operation in ['Revert', 'Regenerate', 'Respawn'])
+assert all(stage in home_copy.lower() for stage in ['capture', 'replacement', 'routing', 'audio'])
+public_copy = json.dumps(pages)
+assert not any(reference in public_copy for reference in ['WHMCS', 'DOMAINTAINS', 'AI Dial-Tone'])
+assert 'native freepbx revision execution is blocked' in public_copy.lower()
 
 class QuietHandler(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *args):
@@ -41,6 +50,27 @@ with tempfile.TemporaryDirectory(prefix='respawn-site-') as temporary:
     assert (target / '.htaccess').read_text() == 'ErrorDocument 404 /404.html\n'
     ET.parse(target / 'sitemap.xml')
     assert 'https://respawn.in1.click/sitemap.xml' in (target / 'robots.txt').read_text()
+    class ResourceParser(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.references = []
+
+        def handle_starttag(self, tag, attrs):
+            values = dict(attrs)
+            for name in ('href', 'src'):
+                if name in values:
+                    self.references.append(values[name])
+
+    for document in target.glob('*.html'):
+        parser = ResourceParser()
+        parser.feed(document.read_text())
+        for reference in parser.references:
+            parsed = urlsplit(reference)
+            if parsed.scheme or parsed.netloc or not parsed.path:
+                continue
+            resource = (document.parent / unquote(parsed.path)).resolve()
+            assert target.resolve() in resource.parents and resource.is_file(), f'broken package reference: {reference}'
+    print('PASS: extracted cPanel package local HTML links and assets resolve')
     handler = functools.partial(QuietHandler, directory=temporary)
     server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), handler)
     worker = threading.Thread(target=server.serve_forever, daemon=True)
@@ -52,7 +82,20 @@ with tempfile.TemporaryDirectory(prefix='respawn-site-') as temporary:
             local_libraries = ROOT / 'build/browser-deps/root/usr/lib/x86_64-linux-gnu'
             if local_libraries.exists():
                 environment['LD_LIBRARY_PATH'] = str(local_libraries) + (':' + environment['LD_LIBRARY_PATH'] if environment.get('LD_LIBRARY_PATH') else '')
-            browser = playwright.chromium.launch(env=environment)
+            try:
+                browser = playwright.chromium.launch(env=environment)
+            except Exception as error:
+                if os.environ.get('CI') == 'true':
+                    raise
+                details = str(error).splitlines()
+                reason = next((line.split('error while loading shared libraries:', 1)[1].strip()
+                    for line in details if 'error while loading shared libraries:' in line), details[0])
+                (ROOT / 'artifacts/site-validation.json').write_text(json.dumps([
+                    {'validation': 'static package links and assets', 'passed': True},
+                    {'validation': 'browser', 'skipped': True, 'reason': reason},
+                ], indent=2) + '\n')
+                print(f'SKIP: Playwright browser checks unavailable in this environment: {reason}')
+                raise SystemExit(0)
             for width, height, label in [(1440, 1000, 'desktop'), (390, 844, 'mobile')]:
                 context = browser.new_context(viewport={'width': width, 'height': height}, reduced_motion='reduce')
                 for slug in pages:

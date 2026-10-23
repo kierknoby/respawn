@@ -15,6 +15,16 @@ final class FileSecrets implements SecretResolver
         catch (\JsonException $exception) { throw new RuntimeException('SECRET_MANIFEST_INVALID', 0, $exception); }
         if (($map['sourcePbxId'] ?? '') !== $sourcePbxId || !is_array($map['references'] ?? null)) { throw new RuntimeException('SECRET_SCOPE_MISMATCH'); }
         $prefix = 'secret:' . $sourcePbxId . ':' . $number . ':';
+        if (array_key_exists('activeReferences', $map)) {
+            if (!is_array($map['activeReferences'])) { throw new RuntimeException('SECRET_MANIFEST_INVALID'); }
+            if (array_key_exists($number, $map['activeReferences'])) {
+                $active = $map['activeReferences'][$number];
+                if (!is_string($active) || !str_starts_with($active, $prefix) || !isset($map['references'][$active])) {
+                    throw new RuntimeException('SECRET_REVISION_UNRESOLVED');
+                }
+                return $active;
+            }
+        }
         $matches = array_values(array_filter(array_keys($map['references']), static fn (string $key): bool => str_starts_with($key, $prefix)));
         if (count($matches) !== 1) { throw new RuntimeException('SECRET_REVISION_UNRESOLVED'); }
         return $matches[0];
@@ -40,10 +50,20 @@ final class FileSecrets implements SecretResolver
     private function readProtected(string $path, int $limit, string $missingCode, string $unsafeCode): string
     {
         if (!file_exists($path)) { throw new RuntimeException($missingCode); }
+        $parent = dirname($path);
+        $realParent = realpath($parent);
         if (!str_starts_with($path, '/') || str_contains($path, '..') || !is_file($path) || is_link($path)
-            || (fileperms($path) & 0077) !== 0 || filesize($path) > $limit) {
+            || $realParent === false || $realParent !== $parent || (fileperms($path) & 0077) !== 0 || filesize($path) > $limit) {
             if ((fileperms($path) & 0077) !== 0 || is_link($path) || !is_file($path)) { throw new RuntimeException($unsafeCode); }
             throw new RuntimeException($unsafeCode);
+        }
+        for ($directory = $realParent; $directory !== '/'; $directory = dirname($directory)) {
+            $permissions = fileperms($directory);
+            $owner = fileowner($directory);
+            if ($permissions === false || $owner === false
+                || ((($permissions & 0022) !== 0) && ((($permissions & 01000) === 0) || $owner !== 0))) {
+                throw new RuntimeException($unsafeCode);
+            }
         }
         $contents = file_get_contents($path);
         if ($contents === false) { throw new RuntimeException('SECRET_FILE_UNREADABLE'); }

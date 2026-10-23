@@ -4,7 +4,7 @@ ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/../../.." && pwd)
 DEMO_ROOT=${RESPAWN_LOCAL_DEMO_ROOT:-"$ROOT/build/local-demo"}
 POND_PORT=${RESPAWN_LOCAL_POND_PORT:-8731}
 DASHBOARD_PORT=${RESPAWN_LOCAL_DASHBOARD_PORT:-8732}
-case "$DEMO_ROOT" in "$ROOT"/build/local-demo|"$ROOT"/build/local-demo-tests/*) ;; *)
+case "$DEMO_ROOT" in "$ROOT"/build/local-demo|"$ROOT"/build/local-demo-tests/*|/tmp/respawn-local-demo-integration-*) ;; *)
     printf '%s\n' 'Refusing to inspect process IDs outside the named Local Pond runtime.' >&2; exit 2;; esac
 if [ -L "$DEMO_ROOT" ] || [ ! -f "$DEMO_ROOT/.respawn-local-demo" ] \
     || [ "$(cat "$DEMO_ROOT/.respawn-local-demo")" != 'respawn-local-pond-dev-v1' ]; then

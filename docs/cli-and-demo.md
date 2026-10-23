@@ -33,6 +33,54 @@ audio or provider readiness. `XDEBUG_MODE=off python3 tests/local-pond.py` start
 its own isolated service processes and verifies the browser flow, scenarios,
 reconciliation/retry, restart and teardown.
 
+## Local Revision Actions
+
+The CLI also exposes `revision-capture`, `revision-list`, `revision-show`,
+`revision-compare`, `revision-retention`, `revert-plan`, `regenerate-plan`,
+`revert-execute` and `regenerate-execute`. Capture stores the current supported
+profile; comparison and planning are local and do not contact the provider. A
+plan is bound to the selected revision, current target snapshot and exact
+capabilities. Execution requires the exact plan confirmation and is not a general
+rollback.
+
+The synthetic target executes tested Revert and Regenerate changes. The native
+FreePBX adapter currently advertises no update, removal or Revert capability and
+marks ownership unverified. Revision CLI planning/execution supplies no native
+apply callback, so native plans requiring those capabilities remain blocked. Do
+not interpret a successful preview or synthetic test as native repair. Respawn is
+separate: it requests provider-controlled replacement work and later routing
+activation under explicit policy.
+
+## Automatic Protection Reconciliation
+
+The module provides `fwconsole respawn protection-status` (read-only local state)
+and `fwconsole respawn protection-reconcile` (one bounded reconciliation pass).
+Protection is disabled by default. Configure provider mode, the supported group
+selection and protected source manifest in the authenticated GUI, enable
+protection, then arrange a host-managed cron entry such as:
+
+```cron
+*/5 * * * * asterisk /usr/sbin/fwconsole respawn protection-reconcile
+```
+
+The module does not install or register this job. Use the host's approved service
+account and actual `fwconsole` path. The command checks the persisted interval,
+uses a target-scoped lock, captures the exact selected blueprint, queues it for
+provider retention, validates durable acknowledgement, retrieves the exact
+revision, and verifies its hash. Publication retries use a stable key and bounded
+backoff; local status distinguishes observed, local, submitted, provider-acknowledged,
+locally acknowledged and retrieval-verified revisions. A non-current status exits
+nonzero so the scheduler can alert. No successful state implies recoverable
+credentials or full PBX restoration.
+
+This workflow currently has only synthetic retention implementations. The HTTPS
+adapter defines `retainRevision`/`retrieveRevision`, but no external compatible
+controller is provided. `MockProvider` and Local Pond are development-only. Do not
+enable a real system schedule against them or describe their receipts as off-site
+protection. A real HTTPS provider also requires the FreePBX CLI PHP runtime's cURL
+extension and a protected bearer-credential file; no live provider test is in this
+repository.
+
 ## Standalone Fixture CLI
 
 ```sh

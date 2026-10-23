@@ -6,7 +6,7 @@ use Respawn\Diagnostic;
 use Respawn\Reconstruction\Blueprint;
 use RuntimeException;
 
-final class HttpsProvider implements Provider
+final class HttpsProvider implements Provider, OrderedRetainedBlueprintProvider, RecoverableCredentialVault
 {
     private string $connection;
 
@@ -91,6 +91,132 @@ final class HttpsProvider implements Provider
         return ['state' => 'acknowledged', 'ack' => ['pbxId' => $pbxId, 'connectionId' => $this->connection,
             'hash' => $result['ack']['hash'], 'blueprintId' => $result['ack']['blueprintId'],
             'version' => $result['ack']['version'], 'at' => is_string($result['ack']['at'] ?? null) ? $result['ack']['at'] : null]];
+    }
+
+    public function retainOrderedRevision(string $pbxId, array $blueprint, string $revisionId,
+        string $idempotencyKey, ?string $parentRevisionId): array
+    {
+        $result = $this->retainRevision($pbxId, $blueprint, $revisionId, $idempotencyKey,
+            ['parentRevisionId'=>$parentRevisionId]);
+        if (($result['recoveryHeadRevisionId'] ?? '') !== $revisionId) { throw new RuntimeException('PROTECTION_HEAD_LINEAGE_CONFLICT'); }
+        return $result;
+    }
+
+    public function retainRevision(string $pbxId, array $blueprint, string $revisionId, string $idempotencyKey,
+        ?array $ordering = null): array
+    {
+        if ($pbxId !== $this->configuration['sourcePbxId'] || !preg_match('/^rev-[a-f0-9]{32}$/D', $revisionId)
+            || !preg_match('/^[a-f0-9]{64}$/D', $idempotencyKey)) {
+            throw new RuntimeException('PROTECTION_PUBLICATION_BINDING_INVALID');
+        }
+        Blueprint::verifyHash($blueprint);
+        Blueprint::ordered($blueprint);
+        if (($blueprint['sourcePbxId'] ?? '') !== $pbxId) { throw new RuntimeException('PROTECTION_SOURCE_IDENTITY_MISMATCH'); }
+        $parameters = ['pbxId' => $pbxId, 'revisionId' => $revisionId,
+            'contentHash' => $blueprint['contentHash'], 'payload' => $blueprint, 'idempotencyKey' => $idempotencyKey];
+        if ($ordering !== null) { $parameters['ordering'] = $ordering; }
+        $result = $this->call('retainRevision', $parameters);
+        $ack = $result['ack'] ?? null;
+        if (($result['state'] ?? '') !== 'durably_retained' || !is_array($ack)
+            || ($result['simulated'] ?? false) === true
+            || in_array($result['mode'] ?? '', ['MOCK','SIMULATED','DEVELOPMENT'], true)
+            || ($ack['simulated'] ?? false) === true
+            || in_array($ack['mode'] ?? '', ['MOCK','SIMULATED','DEVELOPMENT'], true)
+            || ($ack['pbxId'] ?? '') !== $pbxId || ($ack['connectionId'] ?? '') !== $this->connection
+            || ($ack['revisionId'] ?? '') !== $revisionId || ($ack['hash'] ?? '') !== $blueprint['contentHash']
+            || !is_string($ack['blueprintId'] ?? null) || !is_string($ack['publicationId'] ?? null)
+            || ($ack['idempotencyKey'] ?? '') !== $idempotencyKey
+            || !is_string($ack['retentionReceipt'] ?? null) || $ack['retentionReceipt'] === ''
+            || !is_int($ack['version'] ?? null) || $ack['version'] < 1) {
+            throw new RuntimeException('PROTECTION_DURABLE_ACK_INVALID');
+        }
+        $safe = ['state' => 'durably_retained', 'ack' => $ack];
+        if (array_key_exists('recoveryHeadRevisionId', $result)) { $safe['recoveryHeadRevisionId'] = $result['recoveryHeadRevisionId']; }
+        return $safe;
+    }
+
+    public function retrieveRevision(string $pbxId, string $revisionId): array
+    {
+        if ($pbxId !== $this->configuration['sourcePbxId'] || !preg_match('/^rev-[a-f0-9]{32}$/D', $revisionId)) {
+            throw new RuntimeException('PROTECTION_RETRIEVAL_BINDING_INVALID');
+        }
+        $result = $this->call('retrieveRevision', ['pbxId' => $pbxId, 'revisionId' => $revisionId]);
+        $blueprint = $result['blueprint'] ?? null;
+        if (($result['state'] ?? '') !== 'retained' || ($result['simulated'] ?? false) === true
+            || in_array($result['mode'] ?? '', ['MOCK','SIMULATED','DEVELOPMENT'], true)
+            || ($result['pbxId'] ?? '') !== $pbxId
+            || ($result['connectionId'] ?? '') !== $this->connection || ($result['revisionId'] ?? '') !== $revisionId
+            || !is_string($result['publicationId'] ?? null) || !is_array($blueprint)) {
+            throw new RuntimeException('PROTECTION_RETRIEVAL_BINDING_INVALID');
+        }
+        Blueprint::verifyHash($blueprint);
+        if (($blueprint['sourcePbxId'] ?? '') !== $pbxId) { throw new RuntimeException('PROTECTION_RETRIEVAL_SOURCE_MISMATCH'); }
+        return ['pbxId' => $pbxId, 'connectionId' => $this->connection, 'revisionId' => $revisionId,
+            'publicationId' => $result['publicationId'], 'blueprint' => $blueprint];
+    }
+
+    public function retrieveLatestRevision(string $pbxId): array
+    {
+        if ($pbxId !== $this->configuration['sourcePbxId']) { throw new RuntimeException('PROTECTION_RETRIEVAL_BINDING_INVALID'); }
+        $latest = $this->call('latestRevision', ['pbxId'=>$pbxId]);
+        if (!is_string($latest['revisionId'] ?? null)) { throw new RuntimeException('PROTECTION_RETRIEVAL_BINDING_INVALID'); }
+        $retained = $this->retrieveRevision($pbxId, $latest['revisionId']);
+        if (($latest['blueprint']['contentHash'] ?? '') !== $retained['blueprint']['contentHash']
+            || ($latest['publicationId'] ?? '') !== $retained['publicationId']) {
+            throw new RuntimeException('PROTECTION_RETRIEVAL_BINDING_INVALID');
+        }
+        return $retained;
+    }
+
+    public function retentionEvidenceMode(): string
+    {
+        return $this->transport === null ? 'EXTERNAL_PROVIDER' : 'INJECTED_TRANSPORT';
+    }
+
+    public function escrowCredential(string $sourcePbxId, string $secretReference, string $secret,
+        string $idempotencyKey): array
+    {
+        if ($sourcePbxId !== $this->configuration['sourcePbxId']
+            || !preg_match('/^secret:' . preg_quote($sourcePbxId, '/') . ':[0-9]{2,8}:[a-zA-Z0-9._-]{1,64}$/D', $secretReference)
+            || !preg_match('/^[a-f0-9]{64}$/D', $idempotencyKey)
+            || strlen($secret) < 16 || strlen($secret) > 128) {
+            throw new RuntimeException('CREDENTIAL_ESCROW_REQUEST_INVALID');
+        }
+        $result = $this->call('escrowCredential', ['sourcePbxId' => $sourcePbxId,
+            'secretReference' => $secretReference, 'secret' => $secret, 'idempotencyKey' => $idempotencyKey]);
+        if (($result['state'] ?? '') !== 'durably_escrowed' || ($result['simulated'] ?? false) === true
+            || in_array($result['mode'] ?? '', ['MOCK','SIMULATED','DEVELOPMENT'], true)
+            || ($result['sourcePbxId'] ?? '') !== $sourcePbxId
+            || ($result['connectionId'] ?? '') !== $this->connection || ($result['secretReference'] ?? '') !== $secretReference
+            || ($result['idempotencyKey'] ?? '') !== $idempotencyKey || ($result['encryptedAtRest'] ?? false) !== true
+            || !is_string($result['keyId'] ?? null) || !preg_match('/^[a-zA-Z0-9._:-]{1,128}$/D', $result['keyId'])
+            || !is_string($result['vaultReceipt'] ?? null) || $result['vaultReceipt'] === '') {
+            throw new RuntimeException('CREDENTIAL_ESCROW_RECEIPT_INVALID');
+        }
+        return ['state' => 'durably_escrowed', 'sourcePbxId' => $sourcePbxId,
+            'connectionId' => $this->connection, 'secretReference' => $secretReference,
+            'encryptedAtRest' => true, 'keyId' => $result['keyId'], 'vaultReceipt' => $result['vaultReceipt']];
+    }
+
+    public function retrieveCredential(string $sourcePbxId, string $secretReference): array
+    {
+        if (!preg_match('/^[a-zA-Z0-9._:-]{1,128}$/D', $sourcePbxId)
+            || !preg_match('/^secret:' . preg_quote($sourcePbxId, '/') . ':[0-9]{2,8}:[a-zA-Z0-9._-]{1,64}$/D', $secretReference)) {
+            throw new RuntimeException('CREDENTIAL_RETRIEVAL_REQUEST_INVALID');
+        }
+        $result = $this->call('retrieveCredential', ['sourcePbxId' => $sourcePbxId, 'secretReference' => $secretReference]);
+        if (($result['state'] ?? '') !== 'retrieved' || ($result['simulated'] ?? false) === true
+            || in_array($result['mode'] ?? '', ['MOCK','SIMULATED','DEVELOPMENT'], true)
+            || ($result['authenticatedPbxId'] ?? '') !== $this->configuration['sourcePbxId']
+            || ($result['sourcePbxId'] ?? '') !== $sourcePbxId || ($result['secretReference'] ?? '') !== $secretReference
+            || ($result['encryptedAtRest'] ?? false) !== true || !is_string($result['secret'] ?? null)
+            || strlen($result['secret']) < 16 || strlen($result['secret']) > 128
+            || !is_string($result['keyId'] ?? null) || !is_string($result['vaultReceipt'] ?? null)) {
+            throw new RuntimeException('CREDENTIAL_RETRIEVAL_INVALID');
+        }
+        return ['sourcePbxId' => $sourcePbxId, 'authenticatedPbxId' => $this->configuration['sourcePbxId'],
+            'secretReference' => $secretReference, 'secret' => $result['secret'],
+            'encryptedAtRest' => true, 'keyId' => $result['keyId'], 'vaultReceipt' => $result['vaultReceipt']];
     }
 
     public function launch(array $request): array
@@ -349,7 +475,8 @@ final class HttpsProvider implements Provider
     private function call(string $method, array $parameters): array
     {
         $request = ['schema' => 'respawn.provider-rpc.v2', 'connectionId' => $this->connection,
-            'method' => $method, 'pbxId' => $this->configuration['sourcePbxId'], 'parameters' => $parameters];
+            'method' => $method, 'pbxId' => $this->configuration['sourcePbxId'], 'parameters' => $parameters,
+            'requestId' => bin2hex(random_bytes(16)), 'sentAt' => gmdate(DATE_ATOM)];
         $encoded = json_encode($request, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
         if (strlen($encoded) > 65536) { throw new RuntimeException('Provider request exceeds 64 KiB.'); }
         $response = $this->transport ? ($this->transport)($request) : $this->https($encoded);

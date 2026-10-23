@@ -1,6 +1,7 @@
-# Local Pond Development Demonstration
+# Development Pond / Local Pond Demonstration
 
-Local Pond is a separately implemented, development-only reference controller
+# Local Pond is a separately implemented, development-only reference Pond
+controller
 using Respawn's public `respawn.provider-rpc.v2` envelope and reconstruction v2
 blueprint. It is not the closed-source production Pond, does not reproduce its
 internals, and makes no production compatibility claim. All code, listeners, state

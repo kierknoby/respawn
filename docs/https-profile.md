@@ -19,7 +19,8 @@ connectionId described in provider-contracts.md:
 ```
 
 The host-protected credential file supplies a bearer token; no browser field
-accepts a token. Credentials are not encrypted by Respawn. TLS verifies host and
+accepts a token. Local source bearer files require host protection; standalone
+Pond credential escrow uses AES-GCM with a Pond-held key. TLS verifies host and
 certificate, refuses redirects/proxy, uses pinned globally routable IPv4 DNS
 results and bounds connect/request time to 5/20 seconds. No development TLS bypass,
 private-address or IPv6 endpoint support is shipped. Responses are capped at 64 KiB.
@@ -48,7 +49,8 @@ older than 60 seconds, at most 30 seconds future skew, expiry in the future and
 no later than five minutes after observation. Identity, method and schema must
 match; ok=false never implies success. Raw upstream errors are not exposed.
 
-Methods: capabilities, status, publish, launch, operation, reconcile, cancel,
+Methods: capabilities, status, publish, retainRevision, retrieveRevision,
+escrowCredential, retrieveCredential, launch, operation, reconcile, cancel,
 activate and teardown. `advance` is prohibited. Status supplies publication
 {export, attempt, ack} and operations; ack has blueprintId, version, hash, at.
 Publication parameters contain pbxId, payload, force and idempotencyKey. Its result
@@ -98,14 +100,35 @@ GUI reconciles by its locally stored opaque submission ID after refresh/new sess
 
 Local publication journal retains export, attempt and acknowledgement separately.
 Unacknowledged attempts are not suppressed. Forced publication remains validated;
-its transport key is new for each explicit forced call. Automatic retries/backoff
-are not shipped. A retry of forced publication may create another accepted version;
+its transport key is new for each explicit forced call. Manual Application
+publication has no automatic retry/backoff. The protection coordinator uses a
+separate durable outbox with bounded exponential backoff. A retry of forced
+publication may create another accepted version;
 reconcile unknown results before forcing again. Normal content-addressed publication
 reuses its key. Operations must retain idempotency records for their entire lifecycle.
+
+Protection RPC methods are implemented by the experimental standalone `pond/`
+service. `retainRevision` requires `durably_retained`, a receipt, revision ID, exact
+hash, connection and idempotency key. `retrieveRevision` returns the same revision
+and publication binding with the complete blueprint; the client revalidates its
+canonical hash. Credential escrow/retrieval requires authenticated identity/ref
+binding and an encrypted-at-rest/key-ID receipt. The service uses real SQLite and
+AES-GCM; local independent-process tests are not public TLS deployment evidence.
+Requests now include a fresh random `requestId` and RFC3339 `sentAt`; the Pond
+rejects duplicate IDs and requests outside a 60-second window. Revision retry
+keys remain stable across fresh requests. `latestRevision` supports recovery-only
+retrieval of the authoritative recovery head without reading the source's outbox.
+The optional `ordering.parentRevisionId` condition allows promotion only for a
+new child of the current head; null bootstraps an empty head. Valid delayed or
+unordered legacy submissions are retained historically without promotion.
+Acknowledgement fields remain unchanged; `recoveryHeadRevisionId` in the result
+is required by the ordered source path. Retries freeze the same parent/key/ID.
+Older servers lacking that guarantee fail closed for ordered protection, not
+silently fall back to acceptance order. Existing stored heads remain selected.
 
 GUI provider mode exports the explicitly selected real Ring Groups/users/devices;
 it cannot
 silently send fixture blueprints. Launch blocks changed/unacknowledged configuration.
-Enrolment and token issuance are external and unimplemented. Real TLS, DNS,
-permissions and service compatibility remain unverified; tests inject fake transport
-and never exercise a live endpoint.
+Enrolment and revocation are local administrator commands in `pond/bin/pond.php`.
+Real public TLS, DNS and FreePBX service permissions remain unverified; the new
+service test uses authenticated loopback HTTP, not production TLS.

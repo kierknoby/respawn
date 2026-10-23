@@ -35,6 +35,8 @@ final class LocalPondService
         $expected = match ($envelope['method']) {
             'capabilities','status' => [],
             'publish' => ['pbxId','payload','force','idempotencyKey'],
+            'retainRevision' => ['pbxId','revisionId','contentHash','payload','idempotencyKey'],
+            'retrieveRevision' => ['pbxId','revisionId'],
             'launch' => ['pbxId','blueprintId','blueprintVersion','intent','activationPolicy','idempotencyKey','requestedCapabilities'],
             'operation' => ['operationId'],
             'reconcile' => ['idempotencyKey'],
@@ -50,6 +52,8 @@ final class LocalPondService
             'capabilities' => $this->capabilities($pbxId),
             'status' => $this->status($connectionId, $pbxId),
             'publish' => $this->publish($connectionId, $pbxId, $parameters),
+            'retainRevision' => $this->retainRevision($connectionId, $pbxId, $parameters),
+            'retrieveRevision' => $this->retrieveRevision($connectionId, $pbxId, $parameters),
             'launch' => $this->launch($connectionId, $pbxId, $parameters),
             'operation' => $this->getOperation($connectionId, $pbxId, $parameters),
             'reconcile' => $this->reconcile($connectionId, $pbxId, $parameters),
@@ -294,6 +298,63 @@ final class LocalPondService
         });
     }
 
+    private function retainRevision(string $connectionId, string $pbxId, array $parameters): array
+    {
+        $blueprint = $parameters['payload'] ?? null;
+        if (($parameters['pbxId'] ?? '') !== $pbxId || !is_string($parameters['revisionId'] ?? null)
+            || !preg_match('/^rev-[a-f0-9]{32}$/D', $parameters['revisionId'])
+            || !is_string($parameters['contentHash'] ?? null) || !is_array($blueprint)
+            || !preg_match('/^[a-f0-9]{64}$/D', $parameters['idempotencyKey'] ?? '')) {
+            throw new RuntimeException('PROVIDER_RETENTION_REQUEST_INVALID');
+        }
+        Blueprint::verifyHash($blueprint);
+        Blueprint::ordered($blueprint);
+        if (($blueprint['sourcePbxId'] ?? '') !== $pbxId || $blueprint['contentHash'] !== $parameters['contentHash']) {
+            throw new RuntimeException('PROVIDER_RETENTION_CONTENT_MISMATCH');
+        }
+        return $this->store->update(function (array &$state) use ($connectionId, $pbxId, $parameters, $blueprint): array {
+            $record = &$state['providerConnections'][$connectionId][$pbxId];
+            $record ??= ['publication' => null, 'operations' => [], 'idempotency' => []];
+            $revisionId = $parameters['revisionId'];
+            $existing = $record['retainedRevisions'][$revisionId] ?? null;
+            if ($existing !== null) {
+                if (($existing['contentHash'] ?? '') !== $parameters['contentHash']
+                    || ($existing['idempotencyKey'] ?? '') !== $parameters['idempotencyKey']) {
+                    throw new RuntimeException('PROVIDER_RETENTION_IDEMPOTENCY_CONFLICT');
+                }
+                return ['state' => 'durably_retained', 'ack' => $existing['ack']];
+            }
+            $version = (int) ($record['retainedRevisionVersion'] ?? 0) + 1;
+            $publicationId = 'pub-' . substr(hash('sha256', $connectionId . "\0" . $pbxId . "\0" . $revisionId), 0, 32);
+            $ack = ['pbxId' => $pbxId, 'connectionId' => $connectionId, 'revisionId' => $revisionId,
+                'blueprintId' => 'bp-' . substr($parameters['contentHash'], 0, 24), 'publicationId' => $publicationId,
+                'idempotencyKey' => $parameters['idempotencyKey'], 'version' => $version, 'hash' => $parameters['contentHash'],
+                'retentionReceipt' => 'local-pond-simulated-retention:' . $publicationId, 'mode' => 'SIMULATED'];
+            $record['retainedRevisionVersion'] = $version;
+            $record['retainedRevisions'][$revisionId] = ['contentHash' => $parameters['contentHash'],
+                'idempotencyKey' => $parameters['idempotencyKey'], 'publicationId' => $publicationId,
+                'blueprint' => $blueprint, 'ack' => $ack, 'retainedAt' => gmdate(DATE_ATOM)];
+            $this->event($state, $pbxId, $connectionId, 'revision_retained_simulated',
+                ['revisionId' => $revisionId, 'hash' => $parameters['contentHash']]);
+            return ['state' => 'durably_retained', 'ack' => $ack];
+        });
+    }
+
+    private function retrieveRevision(string $connectionId, string $pbxId, array $parameters): array
+    {
+        $revisionId = $parameters['revisionId'] ?? '';
+        if (($parameters['pbxId'] ?? '') !== $pbxId || !is_string($revisionId)
+            || !preg_match('/^rev-[a-f0-9]{32}$/D', $revisionId)) {
+            throw new RuntimeException('PROVIDER_RETRIEVAL_REQUEST_INVALID');
+        }
+        $entry = $this->store->update(static fn (array &$state): ?array =>
+            $state['providerConnections'][$connectionId][$pbxId]['retainedRevisions'][$revisionId] ?? null);
+        if (!is_array($entry)) { throw new RuntimeException('PROVIDER_RETAINED_REVISION_NOT_FOUND'); }
+        return ['state' => 'retained', 'pbxId' => $pbxId, 'connectionId' => $connectionId,
+            'revisionId' => $revisionId, 'publicationId' => $entry['publicationId'], 'blueprint' => $entry['blueprint'],
+            'mode' => 'SIMULATED'];
+    }
+
     private function launch(string $connectionId, string $pbxId, array $request): array
     {
         $required = ['pbxId','blueprintId','blueprintVersion','intent','activationPolicy','idempotencyKey','requestedCapabilities'];
@@ -507,7 +568,8 @@ final class LocalPondService
             || !preg_match('/^local-pond-dev-v1:[a-f0-9]{64}$/D', $envelope['connectionId'] ?? '')
             || !preg_match('/^[a-zA-Z0-9._-]{1,80}$/D', $envelope['pbxId'] ?? '')
             || !is_array($envelope['parameters'] ?? null)
-            || !in_array($envelope['method'] ?? '', ['capabilities','status','publish','launch','operation','reconcile','cancel','activate','teardown'], true)) {
+            || !in_array($envelope['method'] ?? '', ['capabilities','status','publish','retainRevision','retrieveRevision',
+                'launch','operation','reconcile','cancel','activate','teardown'], true)) {
             throw new RuntimeException('PROVIDER_REQUEST_INVALID');
         }
     }

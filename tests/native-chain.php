@@ -4,6 +4,7 @@ require __DIR__ . '/../module/bootstrap.php';
 
 use Respawn\Reconstruction\BuildExecutor;
 use Respawn\Reconstruction\BuildSpec;
+use Respawn\Reconstruction\DesiredStatePlanner;
 use Respawn\Reconstruction\FreePbxBuildTarget;
 use Respawn\Reconstruction\FreePbxRinggroups;
 use Respawn\Reconstruction\MemorySecrets;
@@ -54,7 +55,7 @@ final class CoreContractDouble
     }
 }
 
-function nativeDouble(string $identity): array {
+function nativeDouble(string $identity, bool $applyAvailable = true): array {
     $core = new CoreContractDouble();
     $ringgroups = new class {
         public array $rows = [];
@@ -71,7 +72,7 @@ function nativeDouble(string $identity): array {
     $applies = new ArrayObject(['count' => 0]);
     $target = new FreePbxBuildTarget($core, $groups, $identity, $core->snapshot(...),
         fn (): array => ['modules' => SimulatedPbx::moduleVersions(), 'capabilities' => array_keys(BuildSpec::ADAPTERS), 'mode' => 'CONTRACT_DOUBLE'],
-        function () use ($applies): int { $applies['count']++; return 0; }, static function (array $operations): void {});
+        function () use ($applies): int { $applies['count']++; return 0; }, static function (array $operations): void {}, $applyAvailable);
     return [$target, $core, $ringgroups, $applies];
 }
 
@@ -92,6 +93,49 @@ try {
     if ($captured !== '') { throw new RuntimeException('Raw module output reached the caller.'); }
     if ($result['state'] !== 'configuration_verified' || $applies['count'] !== 1) { throw new RuntimeException('Native contract chain/apply did not complete.'); }
     if ($target->export('pbx-alpha', ['600','601'], $secrets) !== $export) { throw new RuntimeException('Native source/target export mismatch.'); }
+    $nativeSnapshot = $target->reconciliationSnapshot($secrets, 'pbx-alpha', \Respawn\Reconstruction\RevisionStore::operationCatalog($export));
+    if (count($nativeSnapshot) !== count(BuildSpec::plan($export))) { throw new RuntimeException('Native reconciliation snapshot omitted selected objects.'); }
+    foreach ($nativeSnapshot as $entry) {
+        if (($entry['owner'] ?? '') !== 'native_ownership_unverified' || empty($entry['shared'])) {
+            throw new RuntimeException('Native reconciliation inferred ownership.');
+        }
+    }
+    $nativeCapabilities = $target->reconciliationCapabilities();
+    if ($nativeCapabilities['update'] || $nativeCapabilities['remove'] || $nativeCapabilities['revert']) {
+        throw new RuntimeException('Native adapter unexpectedly enables unsupported revision mutations.');
+    }
+    $removedBlueprint = \Respawn\Reconstruction\BuildSpec::create('pbx-alpha', $export['modules'],
+        ['1001' => ['name' => 'Alpha 1001', 'voicemail' => 'novm']],
+        ['1001' => ['user' => '1001', 'description' => 'Alpha 1001', 'authUsername' => 'Alpha-1001',
+            'settings' => BuildSpec::plan($export)[2]['parameters']['settings'], 'secretRef' => 'secret:pbx-alpha:1001:v1']],
+        [['number' => '600', 'description' => 'Alpha primary', 'strategy' => 'ringall', 'timeout' => 20,
+            'members' => ['1001'], 'destination' => 'hangup']]);
+    $nativePlan = DesiredStatePlanner::plan($removedBlueprint, $nativeSnapshot,
+        ['complete' => true, 'objectIds' => array_column(BuildSpec::plan($export), 'id')], 'target', 'rev-' . str_repeat('a', 32),
+        'regenerate', $nativeCapabilities, $target->managedOwner());
+    if (!array_filter($nativePlan['conflicts'], static fn (array $item): bool => in_array($item['reasonCode'] ?? '',
+            ['TARGET_CONFIGURATION_CONFLICT','REMOVAL_OWNERSHIP_UNVERIFIED'], true))) {
+        throw new RuntimeException('Native shared objects were not blocked from reconciliation/removal.');
+    }
+    [$noApplyTarget, $noApplyCore] = nativeDouble('no-apply-target', false);
+    $noApplyCapabilities = $noApplyTarget->reconciliationCapabilities();
+    if ($noApplyCapabilities['apply'] || $noApplyCapabilities['update'] || $noApplyCapabilities['remove']) {
+        throw new RuntimeException('Native target without an apply context advertises executable capabilities.');
+    }
+    $emptySnapshot = $noApplyTarget->reconciliationSnapshot($secrets, 'pbx-alpha',
+        \Respawn\Reconstruction\RevisionStore::operationCatalog($export));
+    $createPlan = DesiredStatePlanner::plan($export, $emptySnapshot,
+        ['complete' => true, 'objectIds' => array_column(BuildSpec::plan($export), 'id')], 'no-apply-target',
+        'rev-' . str_repeat('b', 32), 'regenerate', $noApplyCapabilities, $noApplyTarget->managedOwner());
+    try {
+        (new BuildExecutor($noApplyTarget, new JsonStateStore($root . '/no-apply'), $secrets))
+            ->executeDesiredState($export, $createPlan, $createPlan['planId'], true);
+        throw new LogicException('Native execution without apply context was accepted.');
+    } catch (RuntimeException $exception) {
+        if ($exception->getMessage() !== 'TARGET_APPLY_UNSUPPORTED') { throw $exception; }
+    }
+    if ($noApplyCore->users || $noApplyCore->devices) { throw new RuntimeException('Native writes occurred before the apply gate.'); }
+    echo "PASS: native target keeps updates/removals and shared ownership blocked; missing apply context prevents writes.\n";
     foreach (['1001','1002'] as $number) {
         $saved = $targetCore->devices[$number];
         if ($saved['row']['user'] !== $number || $saved['settings']['account'] !== $number

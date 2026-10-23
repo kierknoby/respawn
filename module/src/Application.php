@@ -86,6 +86,35 @@ final class Application
         }
     }
 
+    public function publicationSnapshot(array $acknowledgement): array
+    {
+        $identity = $this->settings['identity'] ?? '';
+        $connectionId = $acknowledgement['connectionId'] ?? null;
+        $hash = $acknowledgement['hash'] ?? null;
+        if (!is_string($identity) || $identity === '' || !is_string($connectionId) || $connectionId === ''
+            || !is_string($hash) || $hash === '') {
+            throw new RuntimeException('PUBLICATION_SNAPSHOT_BINDING_INVALID');
+        }
+        $scope = self::scope($connectionId, $identity);
+        $publication = $this->store->update(static fn (array &$state): ?array => $state['localPublications'][$scope] ?? null);
+        $blueprint = $publication['export'] ?? null;
+        if (($publication['pbxId'] ?? '') !== $identity || ($publication['connectionId'] ?? '') !== $connectionId
+            || !is_array($blueprint) || ($blueprint['sourcePbxId'] ?? '') !== $identity
+            || ($blueprint['contentHash'] ?? '') !== $hash
+            || ($publication['ack']['pbxId'] ?? '') !== $identity
+            || ($publication['ack']['connectionId'] ?? '') !== $connectionId
+            || ($publication['ack']['hash'] ?? '') !== $hash
+            || !is_string($acknowledgement['blueprintId'] ?? null)
+            || !preg_match('/^[a-zA-Z0-9._:-]{1,128}$/D', $acknowledgement['blueprintId'])
+            || ($publication['ack']['blueprintId'] ?? '') !== $acknowledgement['blueprintId']
+            || !is_int($acknowledgement['version'] ?? null) || $acknowledgement['version'] < 1
+            || ($publication['ack']['version'] ?? null) !== ($acknowledgement['version'] ?? null)) {
+            throw new RuntimeException('PUBLICATION_SNAPSHOT_BINDING_INVALID');
+        }
+        Blueprint::verifyHash($blueprint);
+        return ['blueprint' => $blueprint, 'connectionId' => $connectionId];
+    }
+
     private function blueprint(string $identity): array
     {
         if (($this->settings['mode'] ?? '') === 'mock') { return \Respawn\Reconstruction\SimulatedPbx::blueprint($identity); }

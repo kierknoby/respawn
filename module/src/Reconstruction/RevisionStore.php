@@ -14,17 +14,23 @@ final class RevisionStore
     }
 
     public function capture(array $blueprint, string $origin = 'manual_capture', ?array $publicationAcknowledgement = null,
-        ?array $verification = null, bool $completeManagedScope = true): array
+        ?array $verification = null, bool $completeManagedScope = true, ?string $publicationConnectionId = null): array
     {
         Blueprint::verifyHash($blueprint);
         $operations = BuildSpec::plan($blueprint);
-        if (!in_array($origin, ['manual_capture','configured_publication','pre_operation_checkpoint'], true)) {
+        if (!in_array($origin, ['manual_capture','configured_publication','pre_operation_checkpoint','automatic_reconciliation'], true)) {
             throw new RuntimeException('REVISION_CAPTURE_ORIGIN_INVALID');
         }
         $source = $blueprint['sourcePbxId'];
+        if ($publicationAcknowledgement !== null) {
+            self::assertPublicationAcknowledgement($source, $blueprint['contentHash'], $publicationAcknowledgement,
+                $publicationConnectionId);
+        }
         return $this->store->update(function (array &$state) use ($blueprint, $operations, $source, $origin,
             $publicationAcknowledgement, $verification, $completeManagedScope): array {
             $parent = $state['revisionHeads'][$source]['lastCapturedRevisionId'] ?? null;
+            $sequence = (int) ($state['revisionSequences'][$source] ?? count($state['revisions'][$source] ?? [])) + 1;
+            $state['revisionSequences'][$source] = $sequence;
             $revisionId = 'rev-' . bin2hex(random_bytes(16));
             $secretRefs = [];
             $objectIds = [];
@@ -47,7 +53,7 @@ final class RevisionStore
                 && ($verification['scope']['objectIds'] ?? []) === $managedIds;
             $revision = ['schema' => 'respawn.local-revision.v1', 'revisionId' => $revisionId,
                 'sourcePbxId' => $source, 'blueprintSchemaVersion' => 2,
-                'contentHash' => $blueprint['contentHash'], 'parentRevisionId' => $parent,
+                'contentHash' => $blueprint['contentHash'], 'parentRevisionId' => $parent, 'sequence' => $sequence,
                 'capturedAt' => gmdate(DATE_ATOM), 'captureOrigin' => $origin,
                 'moduleVersions' => $blueprint['modules'], 'objects' => $objectIds,
                 'managedScope' => ['complete' => $completeManagedScope, 'objectIds' => $managedIds],
@@ -78,7 +84,7 @@ final class RevisionStore
 
     public function list(string $source): array
     {
-        return $this->store->update(static function (array &$state) use ($source): array {
+        return $this->store->inspect(static function (array $state) use ($source): array {
             $entries = [];
             foreach ($state['revisions'][$source] ?? [] as $revisionId => $revision) {
                 try { self::validate($revision, $source, $revisionId); }
@@ -89,7 +95,8 @@ final class RevisionStore
                 }
                 $entries[] = self::publicRevision($revision);
             }
-            usort($entries, static fn (array $left, array $right): int => strcmp($right['capturedAt'] ?? '', $left['capturedAt'] ?? ''));
+            usort($entries, static fn (array $left, array $right): int => ($right['sequence'] ?? 0) <=> ($left['sequence'] ?? 0)
+                ?: strcmp($right['capturedAt'] ?? '', $left['capturedAt'] ?? ''));
             $heads = $state['revisionHeads'][$source] ?? [];
             foreach ($entries as &$entry) {
                 $entry['isLastCaptured'] = ($entry['revisionId'] ?? '') === ($heads['lastCapturedRevisionId'] ?? null);
@@ -105,7 +112,7 @@ final class RevisionStore
     public function get(string $source, string $revisionId): array
     {
         if (!preg_match('/^rev-[a-f0-9]{32}$/D', $revisionId)) { throw new RuntimeException('REVISION_ID_INVALID'); }
-        $revision = $this->store->update(static fn (array &$state): ?array => $state['revisions'][$source][$revisionId] ?? null);
+        $revision = $this->store->inspect(static fn (array $state): ?array => $state['revisions'][$source][$revisionId] ?? null);
         if ($revision === null) { throw new RuntimeException('REVISION_NOT_FOUND'); }
         self::validate($revision, $source, $revisionId);
         return $revision;
@@ -113,12 +120,12 @@ final class RevisionStore
 
     public function heads(string $source): array
     {
-        return $this->store->update(static fn (array &$state): array => $state['revisionHeads'][$source] ?? []);
+        return $this->store->inspect(static fn (array $state): array => $state['revisionHeads'][$source] ?? []);
     }
 
     public function retentionLimit(): int
     {
-        return $this->store->update(fn (array &$state): int => $state['revisionRetentionLimit'] ?? $this->retentionLimit);
+        return $this->store->inspect(fn (array $state): int => $state['revisionRetentionLimit'] ?? $this->retentionLimit);
     }
 
     public function compare(string $source, string $fromId, string $toId): array
@@ -141,20 +148,55 @@ final class RevisionStore
             'message' => 'Local configuration comparison does not reverse provider routing, billing or authority.'];
     }
 
-    public function markPublished(string $source, string $revisionId, array $acknowledgement): void
+    public static function operationCatalog(array $blueprint): array
+    {
+        $catalog = [];
+        foreach (BuildSpec::plan($blueprint) as $operation) { $catalog[$operation['id']] = $operation; }
+        ksort($catalog, SORT_STRING);
+        return $catalog;
+    }
+
+    public function operationCatalogForRevision(string $source, string $revisionId): array
+    {
+        $selected = $this->get($source, $revisionId);
+        $catalog = self::operationCatalog($selected['blueprint']);
+        $history = $this->store->inspect(static function (array $state) use ($source): array {
+            return array_values(array_reverse($state['revisions'][$source] ?? [], true));
+        });
+        foreach ($history as $revision) {
+            try { self::validate($revision, $source, $revision['revisionId'] ?? ''); }
+            catch (\Throwable) { continue; }
+            foreach (BuildSpec::plan($revision['blueprint']) as $operation) {
+                $catalog[$operation['id']] ??= $operation;
+            }
+        }
+        ksort($catalog, SORT_STRING);
+        return $catalog;
+    }
+
+    public function markPublished(string $source, string $revisionId, array $acknowledgement, string $connectionId): void
     {
         $revision = $this->get($source, $revisionId);
-        if (($acknowledgement['pbxId'] ?? '') !== $source || !is_string($acknowledgement['connectionId'] ?? null)
-            || ($acknowledgement['hash'] ?? '') !== $revision['contentHash']
-            || !is_int($acknowledgement['version'] ?? null) || $acknowledgement['version'] < 1) {
-            throw new RuntimeException('REVISION_PUBLICATION_ACK_INVALID');
-        }
+        self::assertPublicationAcknowledgement($source, $revision['contentHash'], $acknowledgement, $connectionId);
         $this->store->update(function (array &$state) use ($source, $revisionId, $acknowledgement): void {
             $entry = &$state['revisions'][$source][$revisionId];
             $entry['publicationAcknowledgement'] = $acknowledgement;
             $entry['recordHash'] = self::recordHash($entry);
             $state['revisionHeads'][$source]['lastAcknowledgedRevisionId'] = $revisionId;
         });
+    }
+
+    private static function assertPublicationAcknowledgement(string $source, string $contentHash, array $acknowledgement,
+        ?string $connectionId): void
+    {
+        if (($acknowledgement['pbxId'] ?? '') !== $source || !is_string($connectionId) || $connectionId === ''
+            || !is_string($acknowledgement['connectionId'] ?? null) || $acknowledgement['connectionId'] !== $connectionId
+            || !is_string($acknowledgement['blueprintId'] ?? null)
+            || !preg_match('/^[a-zA-Z0-9._:-]{1,128}$/D', $acknowledgement['blueprintId'])
+            || ($acknowledgement['hash'] ?? '') !== $contentHash
+            || !is_int($acknowledgement['version'] ?? null) || $acknowledgement['version'] < 1) {
+            throw new RuntimeException('REVISION_PUBLICATION_ACK_INVALID');
+        }
     }
 
     public function savePlan(string $source, array $plan): array
@@ -170,7 +212,7 @@ final class RevisionStore
 
     public function getPlan(string $source, string $planId): array
     {
-        $entry = $this->store->update(static fn (array &$state): ?array => $state['desiredPlans'][$source][$planId] ?? null);
+        $entry = $this->store->inspect(static fn (array $state): ?array => $state['desiredPlans'][$source][$planId] ?? null);
         $state = is_array($entry) ? ($entry['state'] ?? '') : '';
         if (!is_array($entry) || !in_array($state, ['previewed','running','unknown','failed','configuration_verified'], true)
             || ($state === 'previewed' && strtotime($entry['expiresAt'] ?? '') <= time())) {
@@ -283,7 +325,8 @@ final class RevisionStore
         $limit = $state['revisionRetentionLimit'] ?? $this->retentionLimit;
         $entries = $state['revisions'][$source] ?? [];
         if (count($entries) <= $limit) { return; }
-        uasort($entries, static fn (array $left, array $right): int => strcmp($left['capturedAt'], $right['capturedAt']));
+        uasort($entries, static fn (array $left, array $right): int => ($left['sequence'] ?? 0) <=> ($right['sequence'] ?? 0)
+            ?: strcmp($left['capturedAt'], $right['capturedAt']));
         $heads = $state['revisionHeads'][$source] ?? [];
         foreach ($entries as $revisionId => $revision) {
             if (count($state['revisions'][$source]) <= $limit) { break; }

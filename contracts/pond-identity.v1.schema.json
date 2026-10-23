@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://respawn.in1.click/contracts/pond-identity.v1.schema.json",
+  "title": "Respawn Pond Identity v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "pondId", "createdAt", "state", "keyIds"],
+  "properties": {
+    "schema": {"const": "respawn.pond-identity.v1"},
+    "pondId": {"type": "string", "pattern": "^[a-zA-Z0-9._:-]{1,128}$"},
+    "createdAt": {"type": "string", "format": "date-time"},
+    "state": {"enum": ["active", "retiring", "revoked"]},
+    "keyIds": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^[a-zA-Z0-9._:-]{1,128}$"}},
+    "previousPondId": {"type": "string", "pattern": "^[a-zA-Z0-9._:-]{1,128}$"}
+  }
+}

@@ -12,7 +12,7 @@ class Respawn extends Command
     protected function configure()
     {
         $this->setName('respawn')->setDescription('Experimental Respawn configuration and operation controls')
-            ->addArgument('action', InputArgument::OPTIONAL, 'status, verify, export, publish, blueprint, capabilities, respawn, operation, reconcile, reconcileSubmission, retrySubmission, cancel, teardown, activate, advance (mock only), plan, export-reconstruction, reconstruct', 'status')
+            ->addArgument('action', InputArgument::OPTIONAL, 'status, protection-status, protection-reconcile, verify, export, publish, blueprint, capabilities, respawn, operation, reconcile, reconcileSubmission, retrySubmission, cancel, teardown, activate, advance (mock only), plan, export-reconstruction, reconstruct', 'status')
             ->addArgument('area', InputArgument::OPTIONAL, 'firewall or blueprint', 'blueprint')
             ->addOption('force', null, InputOption::VALUE_NONE, 'Republish validated intent')
             ->addOption('id', null, InputOption::VALUE_REQUIRED, 'Operation ID')
@@ -35,7 +35,14 @@ class Respawn extends Command
     {
         try {
             $action = $input->getArgument('action');
-            if ($action === 'revision-capture') {
+            if ($action === 'protection-reconcile') {
+                $result = \FreePBX::Respawn()->reconcileProtection();
+            } elseif (in_array($action, ['protection-status','protection-health'], true)) {
+                $result = \FreePBX::Respawn()->protectionStatus();
+            } elseif ($action === 'protection-resume') {
+                $result = \FreePBX::Respawn()->resumeProtection((string) $input->getOption('revision-id'),
+                    (string) $input->getOption('confirmation'));
+            } elseif ($action === 'revision-capture') {
                 $result = \FreePBX::Respawn()->captureLocalRevision($input->getOption('origin') ?: 'manual_capture');
             } elseif ($action === 'revision-list') {
                 $result = \FreePBX::Respawn()->listLocalRevisions();
@@ -82,7 +89,13 @@ class Respawn extends Command
                 $result = \FreePBX::Respawn()->application()->runSafely($input->getArgument('action'), $arguments);
             }
             $output->writeln(json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
-            return in_array($result['state'] ?? '', ['failed','unknown','teardown_partial'], true) ? 1 : 0;
+            if (in_array($action, ['protection-reconcile','protection-status','protection-health'], true)) {
+                if ($action === 'protection-health' && (($result['schedulerState'] ?? '') !== 'recent' || empty($result['enabled']))) { return 1; }
+                return in_array($result['state'] ?? '', ['protected_and_current','not_configured'], true) ? 0 : 1;
+            }
+            return in_array($result['state'] ?? '', ['failed','unknown','teardown_partial','configuration_export_failed',
+                'publication_failed','changes_awaiting_publication','external_retention_unverified',
+                'credentials_unavailable','protection_stale'], true) ? 1 : 0;
         } catch (\Throwable $exception) {
             $diagnostic = \Respawn\Diagnostic::forThrowable($exception, $input->getArgument('action'), $input->getOption('submission-id') ?: $input->getOption('id'));
             \Respawn\Diagnostic::log($diagnostic);

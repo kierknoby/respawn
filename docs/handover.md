@@ -1,137 +1,116 @@
-# Respawn 0.0.1 Local Handover
+# Respawn 0.0.1 Development Handover
 
-## Outcome
+## Current Disposition
 
-An experimental reconstruction-centred development foundation, not a completed
-live recovery service. The module archive, provider interfaces/HTTPS profile,
-mock orchestration, synthetic demo, static project website, runbooks and local
-checks are present. Real FreePBX installability/reconstruction and the private
-operational path remain unverified. No achieved takeover timing is claimed.
+Respawn is an experimental FreePBX reconstruction foundation, not a production
+recovery service. Its intended alternative to a continuously maintained warm spare
+is to retain a validated blueprint and deploy a compatible replacement when
+needed. That proposition remains an objective: complete source-to-target recovery,
+provider routing takeover, live telephony and recovery timing have not been
+established end to end.
 
-This focused pass materially extends reconstruction to a v2 selected Core-user ->
-fixed PJSIP-device -> dependent Ring-Groups chain, with original versioned secret
-references, exact module-version preflight, durable per-operation checkpoints,
-process-death recovery, target locking and one final apply/read-back boundary.
-See [findings and fixes](review-pass.md) and the [precise field/dependency table,
-source revisions and opt-in live procedure](reconstruction-v2.md).
+The working tree is intended to remain local. Do not stage, commit, push, publish,
+deploy or run against a live PBX/provider without separate authorisation. Synthetic
+and contract tests do not establish live FreePBX, carrier, SBC or call behaviour.
 
-## Final Local Results
+## Operation Status
 
-`sh tools/check.sh` and `XDEBUG_MODE=off php tools/demo.php` passed on the final
-functional source. Evidence includes 86 existing/regression assertions, 11
-focused corrective cases, the
-preflight red/green regression, native-shaped Core/PJSIP/Ringgroups continuity and
-partial-write/output-containment checks, 40 executor/secret invariants (including
-real child-process interruption and competing-process locking), independent v2
-JSON Schema and canonical-byte/hash validation, phase-measurement input rules,
-syntax/package checks and 22 extracted-site desktop/mobile page checks, including
-the packaged Apache ErrorDocument directive and a host-style HTTP 404 response.
-The Local Pond real-process integration also covers authenticated v2 loopback HTTP,
-the browser lifecycle, duplicate/idempotent launches, two-PBX isolation, connection
-changes, lost-response retry/reconciliation, all executor/cleanup failure scenarios,
-worker restart recovery, scoped reset and package exclusion. Active-operation
-screenshots are retained at desktop and mobile sizes.
-These establish local contract
-behaviour, not native FreePBX or live network integration. No secret values are in
-blueprints, reports or screenshots. All ten pages were visually reviewed again.
-
-Final branch/HEAD match the starting state exactly; index remains empty. The
-starting source snapshot, per-pass file comparison and unchanged LICENSE check
-are retained. Existing unstaged work has not been staged, reset or removed. No
-commit, push, branch, issue, PR, tag, release, publication, deployment, DNS change
-or live PBX/provider execution occurred.
-
-## Requirements To Evidence
-
-| Requirement | Local evidence | Limit / next gate |
+| Operation | Implemented behaviour | Current boundary |
 | --- | --- | --- |
-| Preserve baseline and local-only work | Existing dirty 0-0-1_Dev/147925b source archived before this pass; empty index and unchanged HEAD | Starting snapshot and per-pass content comparison retained; nothing staged/committed/pushed/published/deployed |
-| README/licence/instructions/reference investigation | README progress, unchanged LICENSE, AGENTS.md, docs/references.md | Earlier prototype/private source unavailable |
-| Reconstruction as core | BuildSpec/BuildExecutor/BuildTarget, native/simulated adapters, independent source/target contracts | Selected Core users and fixed PJSIP devices are recreated before groups; modules/global SIP are prerequisites |
-| Typed instructions, order and verification | IDs/types/schema/parameters/dependencies/capabilities/preconditions/secret refs/postconditions; complete preflight, fsynced checkpoints, read-back and final apply | Trunks/routes/voicemail, broader profiles and all-PBX coverage remain gaps |
-| FreePBX Connectivity module | module.xml, page, BMO settings/lifecycle and Symfony CLI | Syntax/package checks only; isolated real install and RBAC/CSRF tests required |
-| CLI/firewall exports/publication | Shared Application, fwconsole source, optional wrapper, explicit fixture CLI | Only explicit IPv4 /32 trusted hosts; native API runtime unverified |
-| Provider neutrality | Provider/Configuration/HttpsProvider; public schema/profile and responsibility docs | Newly specified neutral endpoint contract, not private API compatibility |
-| One-click operation | Policy preview, acknowledged/current blueprint gate, stable key/submission journal; Local Pond accepts real loopback HTTP and executes the local worker path | External production provider request/response flow needs an authorised compatible service |
-| Progress/reconciliation/lost responses | Connection-bound original provider resolution; session-independent lookup by opaque submission ID; explicit original-request retry; stale visibility and revision-regression quarantine | Live provider and FreePBX session integration remain unverified |
-| Local controller demo | Separate loopback-only Local Pond reference; real v2 HTTP; generated protected credentials; persistent worker/restart; actual Application/BuildExecutor; browser activation/routing-model probe/owned teardown | Target/runtime/connectivity/routing remain simulated; no private-service or production-compatibility claim |
-| Connectivity/DOMAINTAINS/SBC | Public contract and actual-dependency checklist | Exact private APIs/auth/resource semantics unavailable |
-| Activation/cancellation/teardown | Separate controls, manual ready recovery, active disposition, resource ownership, retry/dependency tests | Real authority epochs, signatures, traffic disposition and rollback unverified |
-| Real takeover in minutes | Invocation milestones plus reconstruction/apply-verification/connectivity-routing phase intervals; bottleneck analysis | All real timings unmeasured; real registration/calls/audio require independent probes |
-| Mock/two-PBX exercise | Existing mock harness plus Local Pond's Alpha/Bravo identities, actual source export/planner/executor, original synthetic credential references, interruption/retry/conflicts/apply/cleanup | Simulated targets only; no FreePBX, Asterisk, SIP or real infrastructure used |
-| Public website | Ten pages/26 FAQs, updated reconstruction/readiness/secret content, public v2 schema, house palette | Static cPanel package not deployed; no private management data |
-| Visual/packaging checks | Twenty-two page/viewport checks/screenshots; ZIP root, robots/sitemap, custom 404 mapping, module licence/archive checks | Live cPanel/Apache mapping, hosting headers, DNS and independent accessibility audit unverified |
-| Docs/CI/contribution | Full guides, capability table, opt-in workflow, durable instructions | No remote workflow run; live gates explicitly documented |
+| Revert | Capture/retain revisions, compare, plan; synthetic target executes the selected older state | Native FreePBX updates/removals and verified ownership are unavailable. Native plans are non-executable where those capabilities are required. |
+| Regenerate | Plan selected desired state; synthetic target repairs drift, verifies read-back and preserves foreign/shared objects | Native FreePBX target is create-only and ownership-unverified. Updates/removals/apply through the revision flow remain blocked. |
+| Respawn | Provider-neutral application flow, mock orchestration, persistent local simulation and explicit policy gates | Real provider provisioning/connectivity/SBC operations, native replacement reconstruction and live activation are unverified. |
 
-## Architecture And Safeguards
+The separate native reconstruction CLI has selected create operations and a fixed
+normal framework reload callback. It does not make native Revert/Regenerate
+available. Local revision publication is bound to the exact retained submitted
+blueprint, PBX identity, provider connection, content hash and positive version.
 
-Export -> executable retained blueprint -> provider-authorised operation -> fresh
-PBX -> ordered module reconstruction -> connectivity/SBC preparation -> independent
-verification -> policy-controlled takeover. Module/blueprint contracts stay GPLv3+
-and provider-neutral; hosting, WHMCS, DOMAINTAINS, service/billing reconciliation and
-SBC implementations remain private provider responsibilities. The Pond is one
-controller implementation; alternatives remain possible.
+## Protection Lifecycle
 
-Mock progress is explicit and never time-based. No source or browser data becomes
-shell commands. Rehearsal/standby cannot activate. Unknown outcomes retain original
-keys; source identity and acknowledgements are distinct from infrastructure success.
-Teardown preserves shared/foreign resources and checks active routing disposition.
-No automatic failback to an unhealthy source is implemented or implied.
+`fwconsole respawn protection-reconcile` runs a configurable, disabled-by-default
+coordinator with a 300-second default interval. It validates the current export,
+creates local revisions, pins and queues exact snapshots, retries FIFO with a
+stable connection-scoped key and bounded backoff, and requires independent
+retrieval/hash verification before marking a revision locally acknowledged.
+`protection-status` reports local observation, submission, provider acknowledgement,
+retrieval verification, retry state, error, schedule due time and credential
+readiness. The module does not install a scheduler; the host operator must manage
+cron. Polling can miss changes made after a check and before source loss.
 
-## Commands
+The HTTPS client now requires a durable-retention receipt and exact-revision
+retrieval. The separate experimental `pond/` service now implements SQLite
+retention and AES-GCM escrow with a Pond-held key, scoped local enrolment and
+recovery-only credentials. Reconciliation verifies exact password retrieval;
+the recovery CLI writes the existing native-compatible manifest. The independent
+service test restarts the Pond, deletes source files and verifies a simulated
+target with exact recovered passwords. Local Pond/MockProvider remain simulated.
+Public TLS, actual separate-host deployment, FreePBX cron and native execution
+have not been tested; no operational source-loss claim is authorised.
+
+The synthetic protection suite exercises unchanged suppression, A/B/C FIFO retry,
+lost response, crash recovery, A/B/A history, supported changes, retention repair,
+provider changes, export failure and deletion of source-local state before
+controller-fixture retrieval. This is not a real FreePBX, external controller,
+encrypted vault or off-site test. See [initial-test.md](initial-test.md).
+
+## Reconstruction Scope
+
+The current v2 profile reconstructs selected no-voicemail Core users, fixed PJSIP
+devices and dependent Ring Groups, with original immutable credential references.
+It requires exact compatible modules, global SIP configuration and securely staged
+original secrets. It does not cover trunks, inbound/outbound routes, broader
+numbering/destination continuity, voicemail, licences, media/history, all modules
+or all PBX configuration. See [the v2 profile](reconstruction-v2.md).
+
+Native updates/removals need allowlisted supported module writes, partial-write
+recovery and read-back. Destructive reconciliation additionally needs independent
+ownership evidence; a local journal or matching object is not enough. Trunk and
+route modules, credential continuity, provider connectivity/SBC work, endpoint
+registration, independent inbound/outbound calls and bidirectional audio remain
+engineering gates in the [roadmap](capabilities-and-roadmap.md).
+The bounded first source-to-target procedure is [initial-test.md](initial-test.md).
+The peer federation prototype and its evidence boundary are in
+[federation-testing.md](federation-testing.md).
+
+## Validation
+
+Run:
 
 ```sh
-python3 -m pip install -r requirements-dev.txt
-python3 -m playwright install chromium
 sh tools/check.sh
 XDEBUG_MODE=off php tools/demo.php
-python3 tools/inventory.py
 ```
 
-See validation.md for browser OS libraries, cli-and-demo.md for the complete
-operator command surface, reconstruction-v2.md for exact separately authorised lab
-steps, https-profile.md for transport and operational-path.md for private-service
-dependencies/timings. Live tests require separate explicit authorisation.
+The check command includes PHP syntax, synthetic PHP suites (including
+`tests/revisions.php`), provider/corrective regressions, schema and hash checks,
+static site generation, module/site packaging and browser tests when Playwright
+Chromium can launch. Local browser unavailability is reported as a skip; CI
+installs Chromium and treats browser failures as failures. Record actual command
+results for the checkout being handed over; older browser screenshots, source
+archives and exact counts are not assumed to be present or current.
 
-## Local Artefacts
+The Local Pond demonstration uses synthetic identities and data, loopback HTTP,
+a simulated target and a local routing model. It does not prove FreePBX runtime,
+provider compatibility, SIP registration, live calls/audio or takeover. The static
+site and module packages can be regenerated under ignored `build/` and `artifacts/`
+with the documented tools; generated evidence is not source evidence.
 
-- `artifacts/respawn-0.0.1.tgz`: unsigned experimental module source archive.
-- `artifacts/respawn-site-0.0.1.zip`: upload-root static cPanel package.
-- `artifacts/SHA256SUMS`: generated archive checksums.
-- `build/site/index.html`: direct local browser preview, no server required.
-- `artifacts/screenshots/`: each page at desktop/mobile, plus review sheets.
-- `artifacts/screenshots/local-pond-active-desktop.png` and
-  `artifacts/screenshots/local-pond-active-mobile.png`: actual running local demo.
-- `artifacts/reference/`: six public house-style screenshots and inspection JSON.
-- `artifacts/demo/`: both synthetic blueprints and two-PBX report.
-- `artifacts/changed-files.txt` and `artifacts/worktree-review.json`: exact source
-  inventory and final unstaged state, generated locally by tools/inventory.py.
-- `artifacts/reconstruction-pass-starting-source.tgz`: untouched starting dirty
-  source; `artifacts/reconstruction-pass-files.txt`: exact changes during this pass.
+## Next Gates
 
-All generated artefacts are deliberately ignored, not staged or published.
-Changed source areas are README, AGENTS, .github instructions/workflow, contracts,
-module, tests, tools, website, docs, requirements-dev.txt and .gitignore. LICENSE
-is unchanged. The inventory lists every individual file, including this handover.
+1. Install and exercise the module on disposable FreePBX 17 hosts, including
+   permissions, settings, CLI discovery and the supported create/reload/read-back
+   path.
+2. Prove native updates and independent object ownership before enabling local
+   Revert/Regenerate execution.
+3. Securely stage and resolve original credential versions and test continuity.
+4. Extend supported reconstruction to required trunks, inbound/outbound routes,
+   numbering and destination modules.
+5. Validate provider-owned provisioning, connectivity, SBC preparation, authority
+   fencing, activation and cleanup.
+6. Verify endpoint registration and independent inbound/outbound calls with
+   bidirectional audio; measure full recovery milestones and failure cases.
 
-## Decisions And Limitations
-
-The selected chain now recreates user/device prerequisites through inspected Core
-interfaces, original credentials via protected versioned references, and actual
-Ringgroups destinations. It still does not rebuild all FreePBX configuration.
-Exact installed modules/global SIP settings, real native write/apply proof,
-secure original-secret transport, licences, trunks/numbering, endpoint reconnection,
-existing-call continuity and historical/media recovery remain blockers to takeover.
-
-Production enrolment, cryptographic signatures, policy fencing, full coverage
-discovery, async FreePBX jobs/central logging, broader multi-module reconstruction,
-per-area acknowledgement retention and actual private-service orchestration are
-not complete. The HTTPS profile is contract-tested with fake transport, not proven
-over a real network. A configured URL, accepted blueprint or ready mock is not
-complete recoverability. See capabilities-and-roadmap.md for prioritised work.
-
-PHP 8.2 was unavailable; PHP syntax, tests and packaging ran on PHP 8.4.15 only.
-The local cPanel test verifies a host-style mapping, not live Apache configuration.
-
-GitHub Copilot assisted code, documentation and checks. No model identifier is
-invented. Human review and separately authorised integration acceptance are required.
+No recovery-time objective, universal warm-spare replacement, zero downtime or
+active-call migration is claimed. See [operational path](operational-path.md) for
+provider dependencies and measurement evidence.

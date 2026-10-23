@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://respawn.in1.click/contracts/river-agreement.v1.schema.json",
+  "title": "Respawn River Federation Agreement v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "federationId", "pondIds", "tenantId", "resourceScope", "allowedMethods", "state", "approvals", "createdAt", "expiresAt"],
+  "properties": {
+    "schema": {"const": "respawn.river-agreement.v1"},
+    "federationId": {"type": "string", "pattern": "^[a-zA-Z0-9._:-]{1,128}$"},
+    "pondIds": {"type": "array", "minItems": 2, "maxItems": 2, "uniqueItems": true, "items": {"type": "string", "pattern": "^[a-zA-Z0-9._:-]{1,128}$"}},
+    "tenantId": {"type": "string", "pattern": "^[a-zA-Z0-9._:-]{1,128}$"},
+    "fleetId": {"type": "string", "pattern": "^[a-zA-Z0-9._:-]{1,128}$"},
+    "resourceScope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourcePbxIds"],
+      "properties": {"sourcePbxIds": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "pattern": "^[a-zA-Z0-9._-]{1,80}$"}}}
+    },
+    "allowedMethods": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["blueprint.replication.v1", "blueprint.retrieve.v1", "recovery.delegate.v1", "health.exchange.v1", "audit.exchange.v1"]}},
+    "state": {"enum": ["pending", "active", "suspended", "revoked", "expired"]},
+    "approvals": {
+      "type": "array", "minItems": 2, "maxItems": 2,
+      "items": {"type": "object", "additionalProperties": false, "required": ["pondId", "actorId", "keyId", "approvedAt", "approvalRef"],
+        "properties": {"pondId": {"type": "string", "pattern": "^[a-zA-Z0-9._:-]{1,128}$"}, "actorId": {"type": "string", "pattern": "^[a-zA-Z0-9._:-]{1,128}$"}, "keyId": {"type": "string", "pattern": "^[a-zA-Z0-9._:-]{1,128}$"}, "approvedAt": {"type": "string", "format": "date-time"}, "approvalRef": {"type": "string", "pattern": "^[a-zA-Z0-9._:/-]{1,256}$"}}
+      }
+    },
+    "createdAt": {"type": "string", "format": "date-time"},
+    "expiresAt": {"type": "string", "format": "date-time"},
+    "revokedAt": {"type": "string", "format": "date-time"},
+    "agreementVersion": {"type": "integer", "minimum": 1}
+  }
+}

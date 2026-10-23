@@ -47,6 +47,12 @@ The module is unsigned. Archive structure and PHP syntax are testable locally;
 actual installability, FreePBX permission handling, menus, settings persistence,
 uninstall/upgrade and fwconsole discovery remain integration gates, not passed tests.
 
+Provider-mode HTTPS calls require the PHP cURL extension in the FreePBX CLI
+runtime. Automatic protection is disabled by default and requires a separately
+operator-managed host scheduler; the module does not install cron entries. The
+current durable-retention and credential-vault RPC methods are proposed contracts
+with injected-transport tests only, not a compatible production provider.
+
 Use an isolated, separately authorised lab and the reconstruction runbook before
 considering a production provider adapter. Never suppress module-signature warnings
 on a live PBX as a substitute for development acceptance.

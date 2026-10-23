@@ -42,7 +42,15 @@ state stops processing without overwriting evidence. Preserve it securely for re
 
 No production secret was used in this work. Protected-file credential retrieval
 and HTTPS transport are implemented, but actual TLS/network behaviour is unverified.
-Encrypted storage is not implemented. Raw upstream exception bodies are not printed
+The standalone Pond encrypts retained credentials using OpenSSL AES-256-GCM,
+random nonces and tenant/PBX/reference-bound associated data. Its private key is
+held on the independent Pond; a separately controlled offline backup is required.
+Recovery-only scoped tokens are distinct from source publication tokens. Replay
+IDs, request freshness, immutable references and local revocation are implemented.
+Loopback tests cover source loss, exact recovered values, wrong keys, ciphertext
+tampering, tenant/PBX rejection and log hygiene. Public TLS deployment, power-loss
+durability, automated master-key rotation and production security assurance are
+not established. See [Pond operations](../pond/README.md). Raw upstream exception bodies are not printed
 in the GUI or FreePBX CLI. Stable code/stage/outcome/retryability/correlation fields
 and a safe next action are stored and written to PHP's configured `error_log`; no
 stable FreePBX logger accessor was verified in the pinned framework source. A host
@@ -61,7 +69,19 @@ Original PJSIP secrets are resolved only from identity-bound protected manifests
 and immutable versioned references. Source export checks equality with the source
 credential; a changed revision changes blueprint identity. No password or password
 hash appears in public blueprints. Missing/mismatched original credentials block
-recovery. Provider secret transport/immutability enforcement remains external.
+recovery. Standalone Pond enforces reference immutability and explicitly enrolled
+credential access. An optional `activeReferences` map selects the current reference
+by extension number; old references remain resolvable for queued revisions.
+Unknown/cross-extension active references fail rather than choosing a password.
+
+`FileSecrets` validates absolute canonical paths, regular-file type, final-file
+permissions, size and content format; it rejects symlinked paths and
+group/world-writable ancestors, except root-owned sticky directories such as
+`/tmp`. It does not verify file or parent ownership, nor require every parent to
+be mode `0700`. The operator must still stage manifests and secret files in
+dedicated trusted directories with restrictive ownership/permissions. Do not
+interpret these checks as protection against an untrusted owner or privileged
+local process.
 
 ## Reporting
 

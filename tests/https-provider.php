@@ -16,6 +16,52 @@ $transport = function (array $request) use (&$resultOverride, &$stale, &$wrongId
 };
 $https = new HttpsProvider($configuration, $transport);
 check($https->capabilities()['authorised'] === true, 'HTTPS adapter validates synthetic authenticated capability envelope without network');
+$retainedBlueprint = \Respawn\Reconstruction\SimulatedPbx::blueprint('pbx-alpha');
+$retainedRevisionId = 'rev-' . str_repeat('a', 32);
+$retainedPublicationId = 'pub-' . str_repeat('b', 32);
+$resultOverride = ['state' => 'durably_retained', 'ack' => ['pbxId' => 'pbx-alpha',
+    'connectionId' => $https->connectionIdentity(), 'revisionId' => $retainedRevisionId,
+    'blueprintId' => 'bp-' . substr($retainedBlueprint['contentHash'], 0, 24),
+    'publicationId' => $retainedPublicationId, 'version' => 1, 'hash' => $retainedBlueprint['contentHash'],
+    'idempotencyKey' => str_repeat('c', 64), 'retentionReceipt' => 'provider-receipt-1']];
+$retentionAck = $https->retainRevision('pbx-alpha', $retainedBlueprint, $retainedRevisionId, str_repeat('c', 64));
+check(($retentionAck['ack']['hash'] ?? '') === $retainedBlueprint['contentHash'
+    ] && $https->retentionEvidenceMode() === 'INJECTED_TRANSPORT',
+    'HTTPS retention contract requires a content-bound durable receipt');
+$resultOverride['ack']['mode'] = 'SIMULATED';
+rejects(fn () => $https->retainRevision('pbx-alpha', $retainedBlueprint, $retainedRevisionId, str_repeat('c', 64)),
+    'HTTPS retention rejects simulated durable acknowledgements');
+$resultOverride = ['state' => 'retained', 'pbxId' => 'pbx-alpha', 'connectionId' => $https->connectionIdentity(),
+    'revisionId' => $retainedRevisionId, 'publicationId' => $retainedPublicationId, 'blueprint' => $retainedBlueprint];
+check($https->retrieveRevision('pbx-alpha', $retainedRevisionId)['blueprint'] === $retainedBlueprint,
+    'HTTPS retrieval returns and validates the independently retained blueprint');
+$resultOverride['blueprint']['operations'][0]['parameters']['description'] = 'Tampered';
+rejects(fn () => $https->retrieveRevision('pbx-alpha', $retainedRevisionId),
+    'HTTPS retrieval rejects a blueprint whose canonical hash no longer validates');
+$resultOverride = ['state' => 'durably_retained', 'ack' => ['pbxId' => 'pbx-bravo',
+    'connectionId' => $https->connectionIdentity(), 'revisionId' => $retainedRevisionId,
+    'blueprintId' => 'bp-other', 'publicationId' => $retainedPublicationId, 'version' => 1,
+    'hash' => $retainedBlueprint['contentHash'], 'retentionReceipt' => 'provider-receipt-1']];
+rejects(fn () => $https->retainRevision('pbx-alpha', $retainedBlueprint, $retainedRevisionId, str_repeat('c', 64)),
+    'HTTPS retention rejects a cross-PBX durable acknowledgement');
+$syntheticSecret = bin2hex(random_bytes(24));
+$secretReference = 'secret:pbx-alpha:1001:test-v1';
+$resultOverride = ['state' => 'durably_escrowed', 'sourcePbxId' => 'pbx-alpha',
+    'connectionId' => $https->connectionIdentity(), 'secretReference' => $secretReference,
+    'idempotencyKey' => str_repeat('d', 64), 'encryptedAtRest' => true, 'keyId' => 'test-kms-key-1',
+    'vaultReceipt' => 'synthetic-vault-receipt'];
+$escrowReceipt = $https->escrowCredential('pbx-alpha', $secretReference, $syntheticSecret, str_repeat('d', 64));
+check($escrowReceipt['encryptedAtRest'] === true && !str_contains(json_encode($escrowReceipt), $syntheticSecret),
+    'credential escrow requires encrypted-at-rest receipt without returning plaintext');
+$resultOverride = ['state' => 'retrieved', 'authenticatedPbxId' => 'pbx-alpha', 'sourcePbxId' => 'pbx-alpha',
+    'secretReference' => $secretReference, 'secret' => $syntheticSecret, 'encryptedAtRest' => true,
+    'keyId' => 'test-kms-key-1', 'vaultReceipt' => 'synthetic-vault-receipt'];
+check($https->retrieveCredential('pbx-alpha', $secretReference)['secret'] === $syntheticSecret,
+    'credential retrieval binds the authorised identity and immutable secret reference');
+$resultOverride['encryptedAtRest'] = false;
+rejects(fn () => $https->retrieveCredential('pbx-alpha', $secretReference),
+    'credential retrieval rejects a vault response without encrypted-at-rest evidence');
+$resultOverride = null;
 $wrongIdentity = true;
 rejects(fn () => $https->capabilities(), 'HTTPS adapter rejects cross-PBX response envelope');
 $wrongIdentity = false;

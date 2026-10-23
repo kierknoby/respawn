@@ -19,7 +19,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($action === 'settings') {
             $module->saveSettings(['mode' => $_POST['mode'] ?? '', 'identity' => $module->settings()['identity'],
                 'intent' => $_POST['intent'] ?? '', 'activationPolicy' => $_POST['activationPolicy'] ?? '',
-                'groups' => $_POST['groups'] ?? '', 'secretManifest' => $_POST['secretManifest'] ?? '', 'providerConfiguration' => [
+            'groups' => $_POST['groups'] ?? '', 'secretManifest' => $_POST['secretManifest'] ?? '',
+            'protectionEnabled' => isset($_POST['protectionEnabled']),
+            'protectionIntervalSeconds' => (int) ($_POST['protectionIntervalSeconds'] ?? 300), 'providerConfiguration' => [
                     'schema' => 'respawn.provider-config.v1', 'adapterId' => 'https-json-v1',
                     'endpoint' => $_POST['endpoint'] ?? '', 'credentialRef' => $_POST['credentialRef'] ?? '',
                     'sourcePbxId' => $module->settings()['identity'], 'allowedHosts' => [$_POST['allowedHost'] ?? '']]]);
@@ -44,7 +46,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['respawn_csrf'], (int) ($_SERVER['CONTENT_LENGTH'] ?? 0));
         }
         if (($action === 'publish') && isset($result['ack'])) { $module->recordPublicationRevision($result['ack']); }
-          if (($action === 'publish') && isset($result['ack'])) { $module->recordPublicationRevision($result['ack']); }
           if (($action === 'respawn') && isset($result['operationId'])) { $module->syncLocalRevisionPins([$result]); }
     } catch (Throwable $exception) {
       $diagnostic = \Respawn\Diagnostic::forThrowable($exception, $_POST['action'] ?? 'operator');
@@ -53,6 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 $settings = $module->settings();
+$protection = $module->protectionStatus();
 try { $status = $module->application()->runSafely('status'); }
 catch (Throwable $exception) { $status = ['providerStatus' => 'unavailable_or_unverified', 'operations' => [], 'localSubmissions' => []]; }
 if (isset($status['error'])) {
@@ -88,21 +90,6 @@ foreach ($status['localSubmissions'] ?? [] as $submission) {
   }
 }
 if (!$active && $operations) { $_SESSION['respawn_launch_key'] = bin2hex(random_bytes(24)); }
-$module->syncLocalRevisionPins($operations);
-$revisionStore = $module->revisionStore();
-$revisionSource = $settings['identity'] ?? '';
-$revisionHeads = $revisionStore->heads($revisionSource);
-$revisionEntries = $revisionStore->list($revisionSource);
-$selectedRevisionId = $_POST['revisionId'] ?? ($_SESSION['respawn_selected_revision'] ?? ($revisionHeads['lastCapturedRevisionId'] ?? ''));
-if (is_string($selectedRevisionId) && preg_match('/^rev-[a-f0-9]{32}$/D', $selectedRevisionId)) {
-  $_SESSION['respawn_selected_revision'] = $selectedRevisionId;
-} else { $selectedRevisionId = ''; }
-$revisionPlan = null;
-$revisionPlanId = $_SESSION['respawn_revision_plan'] ?? '';
-if ($revisionPlanId !== '') {
-  try { $revisionPlan = $revisionStore->getPlan($revisionSource, $revisionPlanId); }
-  catch (Throwable) { unset($_SESSION['respawn_revision_plan']); }
-}
 $token = '<input type="hidden" name="csrf" value="' . $escape($_SESSION['respawn_csrf']) . '">';
 $ack = $status['publication']['ack'] ?? null;
 try { $currentBlueprint = $module->application()->run('blueprint'); }
@@ -127,21 +114,46 @@ $canLaunch = in_array($settings['mode'] ?? '', ['mock', 'provider'], true) && !$
     <label>Supported Ring Groups, comma-separated <input name="groups" value="<?= $escape($settings['groups'] ?? '600,601') ?>"></label></p>
     <label>Operation intent <select name="intent"><?php foreach (['rehearsal', 'standby', 'recovery'] as $value): ?><option <?= ($settings['intent'] ?? '') === $value ? 'selected' : '' ?>><?= $escape($value) ?></option><?php endforeach ?></select></label>
     <label>Activation policy <select name="activationPolicy"><?php foreach (['none', 'manual'] as $value): ?><option <?= ($settings['activationPolicy'] ?? '') === $value ? 'selected' : '' ?>><?= $escape($value) ?></option><?php endforeach ?></select></label>
+    <label><input type="checkbox" name="protectionEnabled" value="1" <?= !empty($settings['protectionEnabled']) ? 'checked' : '' ?>> Enable automatic supported-configuration protection</label>
+    <label>Reconciliation interval <select name="protectionIntervalSeconds"><?php foreach ([300 => '5 minutes', 600 => '10 minutes', 900 => '15 minutes', 1800 => '30 minutes', 3600 => '1 hour'] as $seconds => $label): ?><option value="<?= $seconds ?>" <?= (int) ($settings['protectionIntervalSeconds'] ?? 300) === $seconds ? 'selected' : '' ?>><?= $escape($label) ?></option><?php endforeach ?></select></label>
+    <p>Automatic protection requires provider mode and a host scheduler invoking <code>fwconsole respawn protection-reconcile</code>. Installing this module does not modify the host scheduler.</p>
     <button type="submit" class="btn btn-default">Save Policy</button>
   </form>
+  <h2>Blueprint Protection</h2>
+  <p>State: <strong><?= $escape($protection['state']) ?></strong>. Captured means local revision; Protected means acknowledged and retrieved Pond copy; Recoverable additionally requires verified retrieval of the exact versioned credentials. None establishes telephony recovery.</p>
+  <dl><dt>Last configuration check</dt><dd><?= $escape($protection['lastCheckCompletedAt'] ?? 'not checked') ?></dd>
+    <dt>Scheduler activity</dt><dd><?= $escape($protection['schedulerState'] ?? 'never_observed') ?></dd>
+    <dt>Last completed scheduled invocation</dt><dd><?= $escape($protection['lastInvocationCompletedAt'] ?? 'none recorded') ?></dd>
+    <dt>Last successful reconciliation</dt><dd><?= $escape($protection['lastSuccessfulReconciliationAt'] ?? 'none recorded') ?></dd>
+    <dt>Failure stage</dt><dd><?= $escape($protection['failureStage'] ?? 'none recorded') ?></dd>
+    <dt>Last successful configuration inspection</dt><dd><?= $escape($protection['lastSuccessfulInspectionAt'] ?? 'not inspected') ?></dd>
+    <dt>Last successful Pond communication</dt><dd><?= $escape($protection['lastSuccessfulPondCommunicationAt'] ?? 'not recorded') ?></dd>
+    <dt>Last detected change</dt><dd><?= $escape($protection['lastDetectedChangeAt'] ?? 'none recorded') ?></dd>
+    <dt>Latest local revision</dt><dd><code><?= $escape($protection['latestLocalRevisionId'] ?? 'none') ?></code></dd>
+    <dt>Latest submitted revision</dt><dd><code><?= $escape($protection['latestSubmittedRevisionId'] ?? 'none') ?></code></dd>
+    <dt>Latest provider acknowledgement</dt><dd><code><?= $escape($protection['latestProviderAcknowledgedRevisionId'] ?? 'none') ?></code></dd>
+    <dt>Latest locally acknowledged revision</dt><dd><code><?= $escape($protection['latestAcknowledgedRevisionId'] ?? 'none') ?></code></dd>
+    <dt>Latest independently retrieved revision</dt><dd><code><?= $escape($protection['latestVerifiedRevisionId'] ?? 'none') ?></code></dd>
+    <dt>Retention evidence mode</dt><dd><?= $escape($protection['retentionEvidenceMode'] ?? 'not verified') ?></dd>
+    <dt>Last retention verification</dt><dd><?= $escape($protection['lastRetentionVerification']['verifiedAt'] ?? 'not verified') ?></dd>
+    <dt>Next retention verification</dt><dd><?= $escape($protection['nextRetentionVerificationAt'] ?? 'not scheduled') ?></dd>
+    <dt>Pending revisions</dt><dd><?= $escape($protection['pendingRevisions']) ?></dd>
+    <dt>Credentials independently recoverable</dt><dd><?= !empty($protection['credentialsIndependentlyRecoverable']) ? 'yes' : 'no' ?></dd>
+    <dt>Last error</dt><dd><?= $escape($protection['lastError'] ?? 'none recorded') ?></dd>
+    <dt>Next check due (host cron required)</dt><dd><?= $escape($protection['nextCheckAt'] ?? 'not yet checked') ?></dd></dl>
   <h2>Publication And Verification</h2>
   <p>Provider connection <code><?= $escape($status['connectionId'] ?? 'unknown') ?></code>: <?= $escape($status['providerStatus'] ?? 'unavailable_or_unverified') ?>. Pending reconstruction changes: <?= $pending ? 'yes, unavailable or not acknowledged' : 'none detected against acknowledged content' ?>. Provider outage does not prove that resources are absent.</p>
   <?php if (!empty($status['connections'])): ?><h3>Configured And Retained Provider Connections</h3><table class="table"><thead><tr><th scope="col">Connection</th><th scope="col">PBX</th><th scope="col">Mode / endpoint</th><th scope="col">Last used</th></tr></thead><tbody><?php foreach ($status['connections'] as $connection): ?><tr><th scope="row"><code><?= $escape($connection['connectionId']) ?></code></th><td><?= $escape($connection['pbxId']) ?></td><td><?= $escape($connection['configuration']['mode'] ?? 'unknown') ?> / <?= $escape($connection['configuration']['endpoint'] ?? 'local synthetic') ?></td><td><?= $escape($connection['lastUsedAt'] ?? 'unknown') ?></td></tr><?php endforeach ?></tbody></table><?php endif ?>
   <?php if (isset($status['providerDiagnostic'])): ?><p role="status"><strong><?= $escape($status['providerDiagnostic']['code']) ?></strong>: <?= $escape($status['providerDiagnostic']['message']) ?></p><?php endif ?>
   <h2>Revert, Respawn And Regenerate</h2>
-  <div class="alert alert-info">Revert and Regenerate execute locally and do not require the Pond. A preview is read-only. Native Core/device/group updates and removals are not implemented by the inspected adapter; unsupported steps are blocked. The Local Pond development simulation exercises them through the shared planner/executor.</div>
+  <div class="alert alert-info">Revision capture, comparison and planning are available locally. Native FreePBX execution is currently limited to creates; updates, removals, verified ownership and the apply boundary are unavailable for Revert and Regenerate, so those plans remain non-executable. The Local Pond simulation exercises supported changes through the shared planner/executor, but is not native FreePBX evidence.</div>
   <div class="row">
     <div class="col-sm-4"><h3>Revert</h3><p>Choose an earlier retained revision, review the diff and converge only the explicitly managed scope. Missing historical secret versions block the affected action. External services and routing are not reversed.</p></div>
     <div class="col-sm-4"><h3>Respawn</h3><p>Build a replacement through the selected provider policy. Configuration readiness, routing preparation and activation remain separate. Use the controls below after publication.</p></div>
     <div class="col-sm-4"><h3>Regenerate</h3><p>Repair drift or missing supported configuration on this PBX toward a selected revision. It is not a blind reload and preserves objects outside the managed scope.</p></div>
   </div>
   <h3>Local Revision Cache</h3>
-  <p>Protected revisions under the Asterisk variable-data directory; retention limit <?= $escape($revisionStore->retentionLimit()) ?>. Capture is explicit. A capture or provider acknowledgement alone is not known-good evidence. Last captured: <?= $escape($revisionHeads['lastCapturedRevisionId'] ?? 'none') ?>; last acknowledged: <?= $escape($revisionHeads['lastAcknowledgedRevisionId'] ?? 'none') ?>; last applied: <?= $escape($revisionHeads['lastAppliedRevisionId'] ?? 'none') ?>; last supported-state verified: <?= $escape($revisionHeads['lastVerifiedRevisionId'] ?? 'none') ?>.</p>
+  <p>Local revisions under the Asterisk variable-data directory; retention limit <?= $escape($revisionStore->retentionLimit()) ?>. Capture is manual or scheduled when protection is enabled. A capture or provider acknowledgement alone is not known-good evidence. Last captured: <?= $escape($revisionHeads['lastCapturedRevisionId'] ?? 'none') ?>; last acknowledged: <?= $escape($revisionHeads['lastAcknowledgedRevisionId'] ?? 'none') ?>; last applied: <?= $escape($revisionHeads['lastAppliedRevisionId'] ?? 'none') ?>; last supported-state verified: <?= $escape($revisionHeads['lastVerifiedRevisionId'] ?? 'none') ?>.</p>
   <form method="post" style="display:inline-block"><?= $token ?><button class="btn btn-default" name="action" value="revision-capture">Capture Current Supported State</button></form>
   <?php if ($revisionEntries): ?><table class="table"><thead><tr><th scope="col">Revision</th><th scope="col">Captured</th><th scope="col">Origin</th><th scope="col">Hash</th><th scope="col">Scope / evidence</th><th scope="col">Pins</th></tr></thead><tbody>
     <?php foreach ($revisionEntries as $revision): ?><tr><th scope="row"><code><?= $escape($revision['revisionId']) ?></code></th><td><?= $escape($revision['capturedAt'] ?? '') ?></td><td><?= $escape($revision['captureOrigin'] ?? '') ?></td><td><code><?= $escape(substr($revision['contentHash'] ?? '',0,16)) ?></code></td><td><?= count($revision['objects'] ?? []) ?> objects / <?= $escape($revision['classification'] ?? 'captured, unverified') ?></td><td><?= $escape($revision['pinCount'] ?? 0) ?> <?= !empty($revision['pinned']) ? 'pinned' : '' ?></td></tr><?php endforeach ?>

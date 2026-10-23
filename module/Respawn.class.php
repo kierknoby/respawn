@@ -14,7 +14,8 @@ class Respawn extends \FreePBX_Helpers implements \BMO
     {
         if (!$this->getConfig('settings')) {
             $this->setConfig('settings', ['mode' => 'disabled', 'identity' => 'pbx-' . bin2hex(random_bytes(8)),
-                'intent' => 'rehearsal', 'activationPolicy' => 'none']);
+                'intent' => 'rehearsal', 'activationPolicy' => 'none', 'protectionEnabled' => false,
+                'protectionIntervalSeconds' => 300]);
         }
     }
     public function uninstall() {}
@@ -104,12 +105,18 @@ class Respawn extends \FreePBX_Helpers implements \BMO
         {
             $store = $this->revisionStore();
             $source = $this->settings()['identity'];
+            $publication = $this->application()->publicationSnapshot($acknowledgement);
+            $blueprint = $publication['blueprint'];
+            if (($blueprint['sourcePbxId'] ?? '') !== $source) {
+                throw new \RuntimeException('REVISION_PUBLICATION_ACK_INVALID');
+            }
             foreach ($store->list($source) as $revision) {
-                if (($revision['contentHash'] ?? '') !== ($acknowledgement['hash'] ?? '')) { continue; }
-                $store->markPublished($source, $revision['revisionId'], $acknowledgement);
+                if (($revision['contentHash'] ?? '') !== $blueprint['contentHash']) { continue; }
+                $store->markPublished($source, $revision['revisionId'], $acknowledgement, $publication['connectionId']);
                 return $store->get($source, $revision['revisionId']);
             }
-            return $this->captureLocalRevision('configured_publication', $acknowledgement);
+            return $store->capture($blueprint, 'configured_publication', $acknowledgement,
+                null, true, $publication['connectionId']);
         }
 
         public function listLocalRevisions(): array
@@ -129,6 +136,62 @@ class Respawn extends \FreePBX_Helpers implements \BMO
         public function setLocalRevisionRetention(int $limit): void
         {
             $this->revisionStore()->setRetentionLimit($limit);
+        }
+
+        public function protectionStatus(): array
+        {
+            $settings = $this->settings();
+            $enabled = ($settings['protectionEnabled'] ?? false) === true;
+            $directory = $this->FreePBX->Config->get('ASTVARLIBDIR') . '/respawn';
+            $record = (new \Respawn\Storage\JsonStateStore($directory))
+                ->update(static fn (array &$state): array => $state['protection'][$settings['identity']] ?? []);
+            $status = \Respawn\Protection\ProtectionReconciler::formatStatus($record, $enabled);
+            if ($enabled) {
+                try {
+                    if (($settings['mode'] ?? '') !== 'provider') { throw new \RuntimeException('PROTECTION_PROVIDER_NOT_CONFIGURED'); }
+                    \Respawn\Provider\Configuration::validate($settings['providerConfiguration'] ?? []);
+                    if (!preg_match('/^[0-9]{2,8}(,[0-9]{2,8}){0,99}$/D', $settings['groups'] ?? '')
+                        || !is_string($settings['secretManifest'] ?? null) || !str_starts_with($settings['secretManifest'], '/')) {
+                        throw new \RuntimeException('PROTECTION_CONFIGURATION_INCOMPLETE');
+                    }
+                } catch (\Throwable $exception) {
+                    $status['state'] = 'protection_configuration_required';
+                    $status['lastError'] = preg_match('/^[A-Z0-9_]{3,64}$/D', $exception->getMessage())
+                        ? $exception->getMessage() : 'PROTECTION_CONFIGURATION_INCOMPLETE';
+                }
+            }
+            return $status;
+        }
+
+        public function reconcileProtection(?int $now = null): array
+        {
+            $settings = $this->settings();
+            $enabled = ($settings['protectionEnabled'] ?? false) === true;
+            if (!$enabled) { return $this->protectionStatus(); }
+            if (($settings['mode'] ?? '') !== 'provider') { throw new \RuntimeException('PROTECTION_PROVIDER_NOT_CONFIGURED'); }
+            $provider = new \Respawn\Provider\HttpsProvider($settings['providerConfiguration'] ?? []);
+            if (!$provider instanceof \Respawn\Provider\RetainedBlueprintProvider) {
+                throw new \RuntimeException('PROTECTION_RETENTION_INTERFACE_UNAVAILABLE');
+            }
+            $directory = $this->FreePBX->Config->get('ASTVARLIBDIR') . '/respawn';
+            $reconciler = new \Respawn\Protection\ProtectionReconciler(new \Respawn\Storage\JsonStateStore($directory),
+                $this->revisionStore(), $provider, $settings['identity'], (int) ($settings['protectionIntervalSeconds'] ?? 300),
+                new \Respawn\Reconstruction\FileSecrets($settings['secretManifest'] ?? ''));
+            $exporter = fn (): array => $this->exportReconstruction(explode(',', $settings['groups'] ?? ''),
+                $settings['secretManifest'] ?? null);
+            return $reconciler->reconcile($exporter, true, $now);
+        }
+
+        public function resumeProtection(string $revisionId, string $confirmation): array
+        {
+            $settings = $this->settings();
+            if ($confirmation !== 'resume:' . $settings['identity'] . ':' . $revisionId
+                || ($settings['mode'] ?? '') !== 'provider') { throw new \RuntimeException('PROTECTION_RESUME_CONFIRMATION_REQUIRED'); }
+            $directory = $this->FreePBX->Config->get('ASTVARLIBDIR') . '/respawn';
+            $coordinator = new \Respawn\Protection\ProtectionReconciler(new \Respawn\Storage\JsonStateStore($directory),
+                $this->revisionStore(), new \Respawn\Provider\HttpsProvider($settings['providerConfiguration']), $settings['identity']);
+            $coordinator->authoriseResume($revisionId);
+            return ['state'=>'protection_resume_authorised', 'parentRevisionId'=>$revisionId, 'mutations'=>false];
         }
 
         public function syncLocalRevisionPins(array $operations): void
@@ -167,7 +230,7 @@ class Respawn extends \FreePBX_Helpers implements \BMO
             $revisions = $this->revisionStore();
             $revision = $revisions->get($settings['identity'], $revisionId);
             $target = $this->buildTarget();
-            $catalog = $this->revisionOperationCatalog($revisions, $settings['identity']);
+            $catalog = $revisions->operationCatalogForRevision($settings['identity'], $revisionId);
             $snapshot = $target->reconciliationSnapshot(
                 new \Respawn\Reconstruction\FileSecrets($settings['secretManifest'] ?? ''), $settings['identity'], $catalog);
             $plan = \Respawn\Reconstruction\DesiredStatePlanner::plan($revision['blueprint'], $snapshot,
@@ -200,7 +263,7 @@ class Respawn extends \FreePBX_Helpers implements \BMO
             if (($plan['compatibility']['matches'] ?? false) !== true) { throw new \RuntimeException('MODULE_VERSION_MISMATCH'); }
             $revision = $revisions->get($settings['identity'], $plan['revisionId']);
             $target = $this->buildTarget($apply);
-            $catalog = $this->revisionOperationCatalog($revisions, $settings['identity']);
+            $catalog = $revisions->operationCatalogForRevision($settings['identity'], $revision['revisionId']);
             $secretResolver = new \Respawn\Reconstruction\FileSecrets($settings['secretManifest'] ?? '');
             $snapshot = $target->reconciliationSnapshot($secretResolver, $settings['identity'], $catalog);
             $checkpointId = $revisions->checkpointCurrentState($settings['identity'], $revision['revisionId'],
@@ -218,20 +281,6 @@ class Respawn extends \FreePBX_Helpers implements \BMO
                 'planId' => $planId, 'plan' => $plan, 'preOperationCheckpointId' => $checkpointId, 'result' => $result,
                 'providerReconciliationRequired' => $plan['providerReconciliationRequired'] ?? true,
                 'message' => 'Only supported configuration was changed. Provider routing, authority, billing and services were not changed.'];
-        }
-
-        private function revisionOperationCatalog(\Respawn\Reconstruction\RevisionStore $store, string $identity): array
-        {
-            $catalog = [];
-            foreach ($store->list($identity) as $entry) {
-                if (($entry['state'] ?? '') === 'quarantined') { continue; }
-                $revision = $store->get($identity, $entry['revisionId']);
-                foreach (\Respawn\Reconstruction\BuildSpec::plan($revision['blueprint']) as $operation) {
-                    $catalog[$operation['id']] = $operation;
-                }
-            }
-            ksort($catalog, SORT_STRING);
-            return $catalog;
         }
 
         private function assertNoConflictingProviderOperation(string $identity): void
@@ -272,6 +321,13 @@ class Respawn extends \FreePBX_Helpers implements \BMO
             || ($settings['intent'] !== 'recovery' && $settings['activationPolicy'] !== 'none')) {
             throw new \RuntimeException('Invalid or unsafe Respawn settings.');
         }
+        if (!is_bool($settings['protectionEnabled'] ?? false)
+            || !is_int($settings['protectionIntervalSeconds'] ?? 300)
+            || $settings['protectionIntervalSeconds'] < 300 || $settings['protectionIntervalSeconds'] > 86400
+            || $settings['protectionIntervalSeconds'] % 300 !== 0
+            || (!empty($settings['protectionEnabled']) && ($settings['mode'] ?? '') !== 'provider')) {
+            throw new \RuntimeException('PROTECTION_SETTINGS_INVALID');
+        }
         $old = $this->settings();
         if ($old && ($old['identity'] ?? '') !== $settings['identity']) {
             throw new \RuntimeException('PBX identity is immutable after installation; use an explicit future re-enrolment workflow.');
@@ -284,7 +340,9 @@ class Respawn extends \FreePBX_Helpers implements \BMO
             if (!is_string($settings['secretManifest'] ?? null) || !str_starts_with($settings['secretManifest'], '/')
                 || str_contains($settings['secretManifest'], '..')) { throw new \RuntimeException('Protected secret manifest reference required.'); }
         }
-        $this->setConfig('settings', array_intersect_key($settings, array_flip(['mode', 'identity', 'intent', 'activationPolicy', 'providerConfiguration', 'groups', 'secretManifest'])));
+        $this->setConfig('settings', array_intersect_key($settings, array_flip(['mode', 'identity', 'intent',
+            'activationPolicy', 'providerConfiguration', 'groups', 'secretManifest', 'protectionEnabled',
+            'protectionIntervalSeconds'])));
     }
 
     public function application(): \Respawn\Application

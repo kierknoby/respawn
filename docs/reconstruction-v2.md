@@ -94,9 +94,12 @@ It never exports plaintext or a password hash into the blueprint.
 
 The operator/private secret service must securely stage the original secret and
 a manifest outside web roots, repository, logs and screenshots. Source and target
-need separately authorised access to the same immutable value. FileSecrets reads
-only absolute protected regular files (mode 0600, trusted parents, no file symlink,
-bounded size); manifest identity must match the source. Only one selected revision
+need separately authorised access to the same immutable value. FileSecrets checks
+absolute canonical paths, protected regular-file permissions, symlinked paths,
+group/world-writable ancestors (except root-owned sticky directories), bounded
+size and manifest identity. It does not verify file or parent ownership or
+require parent mode `0700`; operators must use trusted, private parent
+directories. Only one selected revision
 per source extension may be present for export; historical target resolution can
 use the exact ref in its blueprint. No encryption, remote secret transport,
 enrolment or private vault integration is claimed. If secure original-secret
@@ -148,6 +151,24 @@ missing object is recreated, old apply evidence is invalidated. Final read-back
 follows apply. Saved objects, generation/reload receipts, runtime, registration,
 calls and audio are separate states. The executor never activates provider routing
 and always leaves runtimeVerified/callsVerified false without independent probes.
+
+## Revision Actions And Native Execution Status
+
+Local revision capture, comparison, planning and snapshot inspection are
+implemented. The Local Pond/synthetic targets exercise Revert and Regenerate
+updates/removals through the shared planner and executor. These are simulation
+results, not native FreePBX write evidence.
+
+`FreePbxBuildTarget` currently supports selected creates and read-back. Its
+reconciliation capabilities deliberately report `update=false`, `remove=false`,
+`revert=false`; native objects are marked shared with ownership unverified. GUI
+and revision CLI planning/execution instantiate it without an apply callback, so
+an execution plan requiring apply is blocked. The separate reconstruction CLI
+passes a fixed normal framework reload callback for its supported create-only
+build. Do not remove those gates or infer ownership from a local journal. Native
+Revert/Regenerate remains unavailable until update and removal semantics,
+independent ownership evidence, conflict handling, apply and post-apply
+verification have been proven on disposable FreePBX hosts.
 
 ## Exact Opt-In Disposable Lab Procedure
 

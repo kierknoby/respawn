@@ -44,6 +44,10 @@ function revisionVariant(array $blueprint, string $variant): array
                 $parameters['description'] = 'Alpha 1001 Operations';
                 $parameters['authUsername'] = 'Alpha-1001-Operations';
             }
+            if ($variant === 'D' && $number === '1001') {
+                $parameters['authUsername'] = 'Alpha-1001-Rotated';
+                $parameters['secretRef'] = 'secret:pbx-alpha:1001:v2';
+            }
             $devices[$number] = $parameters;
         } else {
             $group = ['number' => $number] + $operation['parameters'];
@@ -90,7 +94,48 @@ try {
     });
 
     $revisions = new RevisionStore(new JsonStateStore($root . '/revision-cache'), 10);
+    $validAcknowledgement = ['pbxId' => 'pbx-alpha', 'connectionId' => 'connection-1', 'blueprintId' => 'bp-alpha',
+        'hash' => $blueprintA['contentHash'], 'version' => 1];
+    $invalidAcknowledgements = [
+        array_replace($validAcknowledgement, ['pbxId' => 'pbx-other']),
+        array_replace($validAcknowledgement, ['hash' => str_repeat('0', 64)]),
+        array_replace($validAcknowledgement, ['connectionId' => '']),
+        array_replace($validAcknowledgement, ['version' => 0]),
+        array_replace($validAcknowledgement, ['blueprintId' => '']),
+    ];
+    foreach ($invalidAcknowledgements as $acknowledgement) {
+        revisionReject(fn () => $revisions->capture($blueprintA, 'configured_publication', $acknowledgement,
+            null, true, 'connection-1'), 'REVISION_PUBLICATION_ACK_INVALID',
+            'publication capture rejects an invalid identity, hash, connection, blueprint ID or version binding');
+    }
+    revisionReject(fn () => $revisions->capture($blueprintA, 'configured_publication', $validAcknowledgement,
+        null, true, 'different-connection'), 'REVISION_PUBLICATION_ACK_INVALID',
+        'publication capture rejects an acknowledgement from another provider connection');
+    revisionCheck($revisions->heads('pbx-alpha') === [], 'rejected publication acknowledgements do not advance revision heads');
+    $publishedRevision = $revisions->capture($blueprintA, 'configured_publication', $validAcknowledgement,
+        null, true, 'connection-1');
+    revisionCheck(($publishedRevision['publicationAcknowledgement']['hash'] ?? '') === $publishedRevision['contentHash']
+        && ($revisions->heads('pbx-alpha')['lastAcknowledgedRevisionId'] ?? '') === $publishedRevision['revisionId'],
+        'valid publication acknowledgement advances the head for its exact revision');
+    $retention = new RevisionStore(new JsonStateStore($root . '/revision-retention'), 2);
+    $retainedA = $retention->capture($blueprintA);
+    $retention->pin('pbx-alpha', $retainedA['revisionId'], 'test-pin', 'retention regression');
+    $retention->capture(revisionVariant($blueprintA, 'B'));
+    $retainedLatest = $retention->capture(revisionVariant($blueprintA, 'D'));
+    $retainedIds = array_column($retention->list('pbx-alpha'), 'revisionId');
+    revisionCheck(count($retainedIds) === 2 && in_array($retainedA['revisionId'], $retainedIds, true)
+        && in_array($retainedLatest['revisionId'], $retainedIds, true)
+        && ($retention->get('pbx-alpha', $retainedA['revisionId'])['contentHash'] ?? '') === $blueprintA['contentHash'],
+        'retention removes unpinned history while preserving pinned and latest selectable revisions');
     $revisionA = $revisions->capture($blueprintA);
+    $revisions->markPublished('pbx-alpha', $revisionA['revisionId'], $validAcknowledgement, 'connection-1');
+    revisionCheck(($revisions->heads('pbx-alpha')['lastAcknowledgedRevisionId'] ?? '') === $revisionA['revisionId'],
+        'valid acknowledgement can mark an existing revision with the exact submitted hash');
+    revisionReject(fn () => $revisions->markPublished('pbx-alpha', $revisionA['revisionId'],
+        array_replace($validAcknowledgement, ['hash' => str_repeat('0', 64)]), 'connection-1'),
+        'REVISION_PUBLICATION_ACK_INVALID', 'existing revision rejects an acknowledgement for different content');
+    revisionCheck(($revisions->heads('pbx-alpha')['lastAcknowledgedRevisionId'] ?? '') === $revisionA['revisionId'],
+        'rejected existing-revision acknowledgement does not change the acknowledged head');
     $revisions->markApplied('pbx-alpha', $revisionA['revisionId'], $revisionA['managedScope'], $bootstrap);
     revisionCheck($revisionA['classification'] === 'captured_not_known_good', 'capture does not claim a revision is known good');
     $heads = $revisions->heads('pbx-alpha');
@@ -122,7 +167,16 @@ try {
         $revisionB['revisionId'], 'regenerate', $target->reconciliationCapabilities(), $owner);
     $revisions->savePlan('pbx-alpha', $planB);
     $resultB = $executor->executeDesiredState($blueprintB, $revisions->getPlan('pbx-alpha', $planB['planId']), $planB['planId'], true);
-    revisionCheck($resultB['state'] === 'configuration_verified', 'Regenerate applies a captured dependency-spanning revision');
+    revisionCheck($resultB['state'] === 'configuration_verified'
+        && ($revisions->heads('pbx-alpha')['lastCapturedRevisionId'] ?? '') === $revisionB['revisionId'],
+        'Regenerate applies the latest retained dependency-spanning revision');
+    $revisionD = $revisions->capture(revisionVariant($blueprintA, 'D'));
+    $oldCatalog = $revisions->operationCatalogForRevision('pbx-alpha', $revisionA['revisionId']);
+    $latestCatalog = $revisions->operationCatalogForRevision('pbx-alpha', $revisionD['revisionId']);
+    revisionCheck(($oldCatalog['pjsip:1001']['secretRefs']['authPassword'] ?? '') === 'secret:pbx-alpha:1001:v1'
+        && ($latestCatalog['pjsip:1001']['secretRefs']['authPassword'] ?? '') === 'secret:pbx-alpha:1001:v2'
+        && ($latestCatalog['pjsip:1001']['parameters']['authUsername'] ?? '') === 'Alpha-1001-Rotated',
+        'selected revision catalogue preserves its parameters and rotated secret reference across history');
 
     $snapshotB = $target->reconciliationSnapshot($resolver, 'pbx-alpha');
     $revertA = DesiredStatePlanner::plan($blueprintA, $snapshotB,
@@ -152,6 +206,11 @@ try {
         'a partial selected blueprint does not authorise absence-based deletion');
 
     $revisionC = $revisions->capture($blueprintVariantC);
+    $catalogC = $revisions->operationCatalogForRevision('pbx-alpha', $revisionC['revisionId']);
+    $storedRevisionC = $revisions->get('pbx-alpha', $revisionC['revisionId']);
+    revisionCheck(!in_array('user:1002', array_column(BuildSpec::plan($storedRevisionC['blueprint']), 'id'), true)
+        && isset($catalogC['user:1002']) && isset($catalogC['pjsip:1002']),
+        'selected revision catalogue retains latest historical entries for managed objects it omits');
     $snapshot = $target->reconciliationSnapshot($resolver, 'pbx-alpha');
     $removePlan = DesiredStatePlanner::plan($blueprintVariantC, $snapshot, $revisionC['managedScope'],
         $target->identity(), $revisionC['revisionId'], 'regenerate', $target->reconciliationCapabilities(), $owner);

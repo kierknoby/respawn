@@ -55,6 +55,18 @@ try {
         } catch (RuntimeException $exception) { invariant(true, 'secret resolver rejects ' . $case); }
         chmod($manifestPath, 0600); clearstatcache();
     }
+    $unsafeParent = $root . '/world-writable-parent';
+    mkdir($unsafeParent, 0777);
+    chmod($unsafeParent, 0777);
+    $unsafeParentManifest = $unsafeParent . '/manifest.json';
+    file_put_contents($unsafeParentManifest, json_encode(['sourcePbxId' => 'pbx-alpha', 'references' => [$firstReference => $secretPath]]));
+    chmod($unsafeParentManifest, 0600);
+    try {
+        (new FileSecrets($unsafeParentManifest))->resolve($firstReference, 'pbx-alpha');
+        throw new LogicException('Credential file in an untrusted parent directory was accepted.');
+    } catch (RuntimeException $exception) {
+        invariant($exception->getMessage() === 'SECRET_MANIFEST_UNSAFE', 'secret resolver rejects a private manifest in a world-writable parent');
+    } finally { chmod($unsafeParent, 0700); }
     $rotated = $blueprint;
     foreach ($rotated['operations'] as &$operation) {
         if ($operation['object']['type'] === 'pjsip') { $operation['secretRefs']['authPassword'] = substr($operation['secretRefs']['authPassword'], 0, -2) . 'v2'; }

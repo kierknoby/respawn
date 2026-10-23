@@ -1,0 +1,16 @@
+[respawn-pond]
+user = respawn-pond
+group = respawn-pond
+listen = /run/php/respawn-pond.sock
+listen.owner = www-data
+listen.group = www-data
+listen.mode = 0600
+pm = static
+pm.max_children = 2
+clear_env = yes
+env[RESPAWN_POND_STATE] = /var/lib/respawn-pond/state
+env[RESPAWN_POND_KEY] = /etc/respawn-pond/master.key
+php_admin_flag[display_errors] = off
+php_admin_flag[log_errors] = on
+php_admin_flag[expose_php] = off
+php_admin_value[memory_limit] = 64M

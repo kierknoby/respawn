@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://respawn.in1.click/contracts/lake-fleet.v1.schema.json",
+  "title": "Respawn Lake Fleet Inventory v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "tenantId", "fleetId", "ponds", "pbxs", "updatedAt"],
+  "properties": {
+    "schema": {"const": "respawn.lake-fleet-inventory.v1"},
+    "tenantId": {"type": "string", "pattern": "^[a-zA-Z0-9._:-]{1,128}$"},
+    "fleetId": {"type": "string", "pattern": "^[a-zA-Z0-9._:-]{1,128}$"},
+    "ponds": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^[a-zA-Z0-9._:-]{1,128}$"}},
+    "pbxs": {"type": "array", "items": {"$ref": "#/$defs/pbx"}},
+    "updatedAt": {"type": "string", "format": "date-time"}
+  },
+  "$defs": {
+    "pbx": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourcePbxId", "primaryPondId", "protectionState", "replicas"],
+      "properties": {
+        "sourcePbxId": {"type": "string", "pattern": "^[a-zA-Z0-9._-]{1,80}$"},
+        "primaryPondId": {"type": "string", "pattern": "^[a-zA-Z0-9._:-]{1,128}$"},
+        "protectionState": {"enum": ["unknown", "local_only", "retained", "replicated", "credentials_unavailable", "attention_required"]},
+        "latestRevisionId": {"type": "string", "pattern": "^rev-[a-f0-9]{32}$"},
+        "latestContentHash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "replicas": {"type": "array", "items": {"$ref": "#/$defs/replica"}}
+      }
+    },
+    "replica": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pondId", "revisionId", "contentHash", "state"],
+      "properties": {
+        "pondId": {"type": "string", "pattern": "^[a-zA-Z0-9._:-]{1,128}$"},
+        "revisionId": {"type": "string", "pattern": "^rev-[a-f0-9]{32}$"},
+        "contentHash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "state": {"enum": ["pending", "confirmed", "failed", "unknown"]}
+      }
+    }
+  }
+}

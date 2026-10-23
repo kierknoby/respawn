@@ -7,7 +7,7 @@ export RESPAWN_LOCAL_POND_PORT=${RESPAWN_LOCAL_POND_PORT:-8731}
 export RESPAWN_LOCAL_DASHBOARD_PORT=${RESPAWN_LOCAL_DASHBOARD_PORT:-8732}
 PHP_BIN=${PHP_BIN:-php}
 
-case "$RESPAWN_LOCAL_DEMO_ROOT" in "$ROOT"/build/local-demo|"$ROOT"/build/local-demo-tests/*) ;; *)
+case "$RESPAWN_LOCAL_DEMO_ROOT" in "$ROOT"/build/local-demo|"$ROOT"/build/local-demo-tests/*|/tmp/respawn-local-demo-integration-*) ;; *)
     printf '%s\n' 'Refusing runtime state outside the named build/local-demo area.' >&2; exit 2;; esac
 case "$RESPAWN_LOCAL_POND_PORT" in ''|*[!0-9]*) printf '%s\n' 'Pond port must be numeric.' >&2; exit 2;; esac
 case "$RESPAWN_LOCAL_DASHBOARD_PORT" in ''|*[!0-9]*) printf '%s\n' 'Dashboard port must be numeric.' >&2; exit 2;; esac

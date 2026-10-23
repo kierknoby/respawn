@@ -28,8 +28,18 @@ with tarfile.open(OUT / 'respawn-0.0.1.tgz', 'w:gz') as archive:
         entry.mode = 0o755 if name.endswith('/bin/respawn') else 0o644
         entry.mtime = 0
         archive.addfile(entry, io.BytesIO(contents))
+with tarfile.open(OUT / 'respawn-pond-0.0.1.tgz', 'w:gz') as archive:
+    sources = [path for folder in ['pond', 'module'] for path in sorted((ROOT / folder).rglob('*')) if path.is_file()]
+    sources += [ROOT / 'LICENSE', ROOT / 'tools/preflight.php']
+    for path in sources:
+        contents = path.read_bytes()
+        entry = tarfile.TarInfo('respawn-pond/' + path.relative_to(ROOT).as_posix())
+        entry.size = len(contents)
+        entry.mode = 0o644
+        entry.mtime = 0
+        archive.addfile(entry, io.BytesIO(contents))
 checksums = []
-for name in ['respawn-site-0.0.1.zip', 'respawn-0.0.1.tgz']:
+for name in ['respawn-site-0.0.1.zip', 'respawn-0.0.1.tgz', 'respawn-pond-0.0.1.tgz']:
     path = OUT / name
     checksums.append(hashlib.sha256(path.read_bytes()).hexdigest() + '  ' + name)
 (OUT / 'SHA256SUMS').write_text('\n'.join(checksums) + '\n')

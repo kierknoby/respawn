@@ -1,5 +1,9 @@
 name: Respawn Scaffold Checks
 on:
+  push:
+    branches: [0-0-1_Dev]
+  pull_request:
+    branches: [0-0-1_Dev]
   workflow_dispatch:
 permissions:
   contents: read

@@ -32,6 +32,22 @@ or a spinner. The application persists pending submission and lookup keys before
 network I/O. Unknown outcomes retain the original request/key for reconciliation.
 The local mock does not simulate every failure mode of distributed submission.
 
+## Revisions And Local Repair
+
+Revision capture, comparison and preview describe only the selected supported
+configuration scope. **Revert** plans convergence to an earlier retained
+revision. **Regenerate** plans convergence to a selected retained blueprint.
+Synthetic targets execute both operations and verify saved state; native FreePBX
+revision execution is currently blocked where updates, removals, verified
+ownership or an apply callback are required. Do not remove capability checks to
+make an execution control appear available. Neither local action changes provider
+routing, authority, billing or replacement resources.
+
+**Respawn** is a distinct provider request for a replacement PBX. It requires a
+current acknowledged blueprint and provider policy; reconstruction, runtime
+readiness, routing preparation, activation and independent call/audio evidence
+remain separate gates.
+
 ## Activation
 
 Rehearsal and standby require none. Recovery can request manual activation after

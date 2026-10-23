@@ -11,11 +11,16 @@ $applicationStore = new JsonStateStore($directory . '/application');
 $underlying = new MockProvider($applicationStore, 'pbx-alpha');
 $interrupted = new class($underlying) implements Provider {
     public bool $loseResponse = true;
+    public ?Closure $afterPublish = null;
     public function __construct(private Provider $delegate) {}
     public function connectionIdentity(): string { return $this->delegate->connectionIdentity(); }
     public function capabilities(): array { return $this->delegate->capabilities(); }
     public function status(): array { return $this->delegate->status(); }
-    public function publish(string $pbxId, array $intent, bool $force = false): array { return $this->delegate->publish($pbxId, $intent, $force); }
+    public function publish(string $pbxId, array $intent, bool $force = false): array {
+        $result = $this->delegate->publish($pbxId, $intent, $force);
+        if ($this->afterPublish !== null) { ($this->afterPublish)(); }
+        return $result;
+    }
     public function launch(array $request): array {
         $result = $this->delegate->launch($request);
         if ($this->loseResponse) { $this->loseResponse = false; throw new RuntimeException('Simulated lost response after acceptance.'); }
@@ -32,6 +37,25 @@ $settings = ['identity' => 'pbx-alpha', 'mode' => 'provider', 'intent' => 'rehea
 $firewallSource = new FixtureFirewallSource(__DIR__ . '/fixtures/firewall.json');
 $application = new Application($settings, $applicationStore, $firewallSource, $interrupted, fn (): array => $blueprint);
 $application->run('publish');
+$groupsAfterChange = $groups;
+$groupsAfterChange[0]['description'] = 'Changed after publication';
+$changedAfterPublication = Respawn\Reconstruction\Blueprint::create('pbx-alpha', $groupsAfterChange);
+$publishedDocument = $blueprint;
+$interrupted->afterPublish = static function () use (&$publishedDocument, $changedAfterPublication): void {
+    $publishedDocument = $changedAfterPublication;
+};
+$snapshotApplication = new Application($settings, $applicationStore, $firewallSource, $interrupted,
+    static function () use (&$publishedDocument): array { return $publishedDocument; });
+$publicationResult = $snapshotApplication->run('publish', ['force' => true]);
+$interrupted->afterPublish = null;
+$publicationSnapshot = $snapshotApplication->publicationSnapshot($publicationResult['ack']);
+check($publicationSnapshot['blueprint']['contentHash'] === $publicationResult['ack']['hash']
+    && $publicationSnapshot['blueprint']['contentHash'] !== $publishedDocument['contentHash'],
+    'publication acknowledgement resolves the retained submitted blueprint after source configuration changes');
+rejects(fn () => $snapshotApplication->publicationSnapshot(array_replace($publicationResult['ack'], ['hash' => $publishedDocument['contentHash']])),
+    'publication snapshot rejects an acknowledgement for a different source configuration');
+rejects(fn () => $snapshotApplication->publicationSnapshot(array_replace($publicationResult['ack'], ['blueprintId' => 'other-blueprint'])),
+    'publication snapshot rejects an acknowledgement with a different provider blueprint ID');
 $launchArguments = ['key' => 'application-lost-response-001'];
 rejects(fn () => $application->run('respawn', $launchArguments), 'accepted operation with lost response remains unknown locally');
 $submissions = $application->run('status')['localSubmissions'];

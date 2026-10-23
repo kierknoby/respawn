@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://respawn.in1.click/contracts/river-federation.v1.schema.json",
+  "title": "Respawn River Federation Message v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "messageId", "senderPondId", "senderKeyId", "recipientPondId", "federationId", "tenantId", "method", "idempotencyKey", "nonce", "payloadHash", "createdAt", "expiresAt", "payload"],
+  "properties": {
+    "schema": {"const": "respawn.river-federation.v1"},
+    "messageId": {"type": "string", "pattern": "^[a-zA-Z0-9._:-]{1,128}$"},
+    "senderPondId": {"type": "string", "pattern": "^[a-zA-Z0-9._:-]{1,128}$"},
+    "senderKeyId": {"type": "string", "pattern": "^[a-zA-Z0-9._:-]{1,128}$"},
+    "recipientPondId": {"type": "string", "pattern": "^[a-zA-Z0-9._:-]{1,128}$"},
+    "federationId": {"type": "string", "pattern": "^[a-zA-Z0-9._:-]{1,128}$"},
+    "tenantId": {"type": "string", "pattern": "^[a-zA-Z0-9._:-]{1,128}$"},
+    "fleetId": {"type": "string", "pattern": "^[a-zA-Z0-9._:-]{1,128}$"},
+    "method": {"enum": ["federation.establish", "federation.revoke", "blueprint.replicate", "blueprint.receipt", "blueprint.retrieve", "recovery.delegate", "recovery.handover", "inventory.exchange", "health.exchange", "audit.exchange"]},
+    "idempotencyKey": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "nonce": {"type": "string", "pattern": "^[a-f0-9]{32,128}$"},
+    "payloadHash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "correlationId": {"type": "string", "pattern": "^[a-zA-Z0-9._:-]{1,128}$"},
+    "createdAt": {"type": "string", "format": "date-time"},
+    "expiresAt": {"type": "string", "format": "date-time"},
+    "payload": {"type": "object"}
+  }
+}

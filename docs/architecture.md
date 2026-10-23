@@ -8,10 +8,15 @@ inventory or backup reference. The intention is to supersede slow conventional
 backup/restore for supported declarative configuration, not historical/media data.
 
 ```text
-FreePBX modules -> read-only exporters -> reconstruction blueprint
- -> provider connector -> controller retention and authorisation
- -> fresh PBX provisioning -> module reconstruction executor
- -> connectivity and SBC preparation -> verification -> explicit activation
+FreePBX modules -> The Puddle (local supported state/revisions)
+ -> The Stream (scheduled detect/capture/publish/verify)
+ -> The Pond (independent retention and recovery authority)
+ <-> The River (optional peer-to-peer Pond replication)
+ -> fresh PBX -> existing module reconstruction executor
+ -> provider connectivity/routing -> verification -> explicit activation
+
+The Lake (optional fleet inventory/policy) coordinates metadata and delegated
+actions; it is not required for Pond-to-Pond replication or ordinary recovery.
 ```
 
 These are logical responsibilities. The module does not connect directly to an
@@ -28,10 +33,14 @@ traffic; this diagram does not assert a private network topology.
 | Infrastructure/connectivity adapters | Provider-owned execution and resource receipts | Prepared routing is already active |
 | SIP edge | Enforce authorised controller policy and report effective state | A PBX may directly authorise arbitrary routes |
 
-The Pond is our separately licensed controller implementation. Compatible
-alternative providers/controllers must implement the public contracts. No private
-production service is included. WHMCS, hosting and SBC details remain behind the
-provider boundary. The module licence does not license those services.
+The Pond is the independent controller/retention role in the ecosystem; it is not
+bound to one hosting or telecommunications provider. `development/local-pond/` is
+a development-only reference Pond, not the production controller and not The
+Puddle. Compatible independent providers implement the public contracts. No
+production-certified retention service is included. The separate experimental
+`pond/` service implements SQLite retention and encrypted credential custody;
+its independent-process evidence uses synthetic PBX state. Hosting and SBC details remain behind
+the provider boundary.
 
 ## Current Implementation
 
@@ -48,9 +57,44 @@ framework reload callback. See reconstruction-v2.md for fields and prerequisites
 Legacy v1 Executor/Target remain compatibility-only and are not the new CLI build.
 
 There is no independent daemon, automatic provisioning, generated Asterisk-file
-editing or browser-supplied shell execution. Work is synchronous and explicitly
-invoked. Production orchestration must be asynchronous and reconciled via provider
-operations; a FreePBX job/scheduler hook is not implemented in this scaffold.
+editing or browser-supplied shell execution. Protection reconciliation is exposed
+as `fwconsole respawn protection-reconcile`, with a five-minute default interval,
+durable local locking/outbox, FIFO retries and independent retrieval checks. The
+module does not install a host cron entry or register a verified FreePBX scheduler
+job; an administrator must schedule the CLI action. Production orchestration
+remains provider-driven and is not implemented here.
+
+The operator model has three distinct actions. **Revert** selects an earlier
+retained revision; **Regenerate** reconciles the local supported scope to a
+selected blueprint; **Respawn** requests a provider-controlled replacement build
+and later routing/activation. Revision capture, comparison and read-only planning
+are local. Revert and Regenerate execute against the synthetic target in tests,
+but the native FreePBX reconciliation target rejects updates/removals and marks
+ownership unverified. Native revision plans are therefore not executable. The
+separate native reconstruction CLI has a fixed explicit framework-reload callback
+for supported creates; this is not proof of a native revision recovery path.
+Respawn provider lifecycle is tested only through mock/local simulation.
+
+The new protection coordinator does not change reconstruction. It stores exact
+blueprints in the local revision cache, queues revision IDs for provider retention,
+requires a durable receipt and independently retrieved hash before locally
+acknowledging a revision, and periodically rechecks the latest retained copy. The
+HTTPS client connects to the standalone `pond/` implementation of the same
+contract. SQLite commits precede receipts; exact immutable secret references are
+escrowed using AES-GCM with a Pond-held key and read back before readiness.
+Independent recovery credentials retrieve a protected bundle consumed by the
+existing `FileSecrets` and reconstruction executor. The source-loss test uses a
+separate HTTP process and real encryption/storage, but synthetic source/target.
+Public TLS deployment, FreePBX scheduling and native execution remain lab gates.
+Mock/Local Pond/injected evidence cannot become `protected_and_current`.
+
+The five ecosystem components and their target topology are specified in
+[ecosystem-architecture.md](ecosystem-architecture.md). River federation is
+peer-to-peer at the application-contract level; current local ledger tests do not
+implement production peer authentication, encryption, relay transport, key
+rotation or cross-Pond recovery authority. The Lake schema is inventory vocabulary
+only; no Lake service is implemented. See the separate River, Lake and
+[recovery-authority](recovery-authority.md) documents for explicit limits.
 
 `development/local-pond/` is a separately implemented development reference
 controller, not module core and not the closed-source production controller. Its
@@ -70,6 +114,31 @@ file fsync, atomic rename and directory fsync. Process-death recovery is tested;
 power-loss and filesystem guarantees still need environment-specific proof.
 Host-private state roots must be shared by every cooperating reconstruction
 runner. Native module writes are not transactional; partial states stop safely.
+
+Large local state uses content-addressed immutable chunks beneath each private
+state root's `chunks/`, with an atomic `state.json` reference journal. The API is
+unchanged, so revisions, plans, pins, heads, acknowledgements and retries migrate
+together without resetting identities or hashes. Small journals remain inline.
+Above 512 KiB, arrays over 32 KiB are recursively externalised; files are fsynced
+before the reference journal is renamed and its directory fsynced. Unreachable
+chunks are removed only after successful commit. The 1 MiB per-journal/chunk
+safety bound is unchanged, not an aggregate history limit. Back up the entire
+directory while runners are stopped, never just `state.json`. Older software
+cannot read the new marker; restore a full pre-upgrade backup before downgrade.
+
+Configured retention remains 2-500 revisions, default 50, with pinned/head
+dependencies protected. If pins block that limit, capture fails visibly rather
+than discarding recovery data. Supported blueprints remain at most 100 operations;
+the HTTPS envelope remains bounded to 64 KiB including blueprint and metadata.
+Provision disk/memory for the chosen history and scope; resource failures leave
+the last committed history intact.
+
+The standalone Pond promotes a newly retained revision only when its explicit
+parent equals the current recovery head (or both are null for initial capture).
+Historical and legacy unordered submissions remain retained but cannot promote.
+Pre-extension heads/receipts are preserved. A restored source must explicitly
+authorise continuation from the verified current head, never infer authority from
+its local sequence or receipt arrival time. River/Lake are unchanged.
 
 ## Coverage
 

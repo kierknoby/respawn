@@ -7,14 +7,17 @@ $root = localDemoRoot();
 $repository = dirname(__DIR__, 3);
 $expected = $repository . '/build/local-demo';
 $testParent = $repository . '/build/local-demo-tests';
+$temporaryParent = realpath(sys_get_temp_dir());
 $canonicalRoot = realpath($root);
 $validDefault = $canonicalRoot !== false && $canonicalRoot === realpath($expected);
 $validTestRoot = $canonicalRoot !== false && realpath(dirname($canonicalRoot)) === realpath($testParent)
     && preg_match('/^integration-[a-zA-Z0-9_-]+$/D', basename($canonicalRoot));
-if ((!$validDefault && !$validTestRoot)
+$validTemporaryTestRoot = $canonicalRoot !== false && dirname($canonicalRoot) === $temporaryParent
+    && preg_match('/^respawn-local-demo-integration-[a-zA-Z0-9_-]+$/D', basename($canonicalRoot));
+if ((!$validDefault && !$validTestRoot && !$validTemporaryTestRoot)
     || is_link($root) || !is_file($root . '/.respawn-local-demo')
     || trim((string) file_get_contents($root . '/.respawn-local-demo')) !== 'respawn-local-pond-dev-v1') {
-    fwrite(STDERR, "Refusing reset: the exact marker-owned build/local-demo root is required.\n");
+    fwrite(STDERR, "Refusing reset: an exact marker-owned Local Pond runtime root is required.\n");
     exit(2);
 }
 foreach (['pond.pid','dashboard.pid','worker.pid'] as $pidName) {
@@ -35,7 +38,7 @@ foreach ($allowed as $name) {
     if (file_exists($path)) { removeNamedTree($root, $path); }
 }
 Respawn\LocalPond\LocalPondSetup::initialise($root, localFixturePath());
-echo "Reset only the marker-owned build/local-demo runtime; new synthetic credentials were generated.\n";
+echo "Reset only the marker-owned Local Pond runtime; new synthetic credentials were generated.\n";
 
 function removeNamedTree(string $root, string $path): void
 {

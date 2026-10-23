@@ -83,6 +83,17 @@ interfaces are in the module; JSON vocabulary is described below and in
 schema; unknown major versions fail closed. Negotiate optional capabilities before
 use. Do not silently ignore unknown reconstruction operations or activation modes.
 
+Revision retention/retrieval and credential escrow are implemented by the
+experimental standalone `pond/` service. It commits SQLite before acknowledgements,
+uses immutable revision/reference records, scoped bearer enrolment, replay
+rejection and AES-256-GCM with a separately held Pond key. `latestRevision` returns
+the current recovery head, not the most recently received historical revision;
+retrieval and recovery remain separately scoped. Ordered publication uses the
+optional parent-head condition without changing immutable receipt fields.
+An independent loopback process/source-loss test passes; no external provider,
+public TLS deployment or real FreePBX result is established. See
+[the Pond runbook](../pond/README.md).
+
 ## Common Rules
 
 All identifiers are opaque strings, maximum 128 characters. Use UTF-8 JSON, bounded
@@ -119,6 +130,10 @@ creating anything new. Never infer success from HTTP transport completion alone.
 | Canonical firewall intent | schema, pbxId, generatedAt, intent.enabled, intent.sources, contentHash | only IPv4 /32; disabled must be deliberate, not inferred from missing module |
 | Publication | publicationId/idempotencyKey, pbxId, schema/version, contentHash, payload | forced republishes still validate and authorise; no-change is based on acknowledged content |
 | Acknowledgement | publicationId, authenticatedPbxId, contentHash, blueprintId, version, acceptedAt, retention receipt | rejected/partial must list reasons; acknowledgement matching is mandatory |
+| Revision retention | authenticated PBX, immutable revisionId, exact blueprint/hash, stable idempotencyKey | `durably_retained` only after durable storage; receipt binds PBX, connection, revision, hash, publicationId, version, receipt and key |
+| Revision retrieval | authenticated recovery principal, source PBX and revisionId | Return exact stored blueprint plus PBX/connection/revision/publication identity; client revalidates canonical hash |
+| Credential escrow/retrieval | source identity, immutable secretRef, idempotency key and authenticated caller | Standalone Pond uses AES-GCM and a Pond-held key; retrieval requires an enrolled recover permission. Public TLS and native FreePBX remain untested. |
+| PBX check-in/heartbeat | Not implemented | No absence-of-heartbeat inference, failure declaration or automatic takeover is defined |
 | Reconstruction blueprint | schema, sourcePbxId, compatibility, operations, coverage, contentHash | dependencies, secretRefs and readiness policies for future adapters; not arbitrary scripts |
 | Operation request | pbxId, blueprintId, blueprintVersion, intent, activationPolicy, idempotencyKey, requestedCapabilities | required capabilities must all be satisfied; bound to authenticated identity |
 | Operation response | operationId, source identity, request binding, state, revision, timestamps, resources, errors, milestones | provider receipt, per-stage outcomes, reconciliation links; mock fields differ from the future transport envelope |

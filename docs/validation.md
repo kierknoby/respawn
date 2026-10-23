@@ -1,5 +1,173 @@
 # Local Validation Results
 
+## Independent Audit Correction Pass (23 October 2026)
+
+F1-F6 are reconciled in [the disposition report](pre-test-review.md). Version
+remains 0.0.1. The full local gate and synthetic demo were rerun with the new
+capacity, ordering, diagnostics, preflight and packaged-cron regressions enabled.
+Earlier evidence below is retained as history, not rewritten as real-host proof.
+
+Storage checks pass for 40 users/40 PJSIP devices/one group across 50 revisions,
+50 revisions at the unchanged 100-operation boundary, and the configured maximum
+500 revisions with the synthetic small profile. All revisions remain retrievable.
+Pruning/pins/acknowledgements, compare, Revert/Regenerate plans, source sequence,
+simultaneous writers, process kill, OS-enforced write exhaustion, legacy migration,
+failed migration, corrupt-chunk recovery and 500 pending journal entries pass.
+The aggregate 1 MiB failure is removed without increasing the per-file bound.
+
+Pond tests pass for A/B/C promotion, duplicate A, delayed history, unordered legacy
+retention, immutable lineage conflicts, restart, pre-extension head preservation,
+cached/current head verification and explicitly authorised source resumption.
+Unchanged restored state creates a new child rather than replaying an old receipt.
+The separate HTTP service still passes SQLite/AES-GCM source-loss recovery with
+exact original/rotated passwords and a simulated target; new destination
+overwrite/symlink rejection tests pass. A broken-link fixture cleanup warning
+found in the first full run was corrected and the affected test rerun cleanly.
+
+Protection tests pass for returned publication-failure diagnostics, preserved
+protected head, FIFO/backoff/restart, recovery timestamps, no heartbeat refresh
+on status reads, missed scheduler state and three-archive private log rotation.
+Existing application/provider, 41 reconstruction invariants, revisions,
+federation, schema/hash, local Pond, module/Pond/site package, extracted static
+links/assets and synthetic demo checks remain enabled and pass.
+
+Read-only Pond/recovery preflights pass locally: PHP 8.3.33, OpenSSL 3.0.20,
+cURL 8.5.0, SQLite 3.45.1 and durable-file functions. Source preflight correctly
+fails: no `fwconsole`, FreePBX configuration, PDO MySQL, `asterisk` execution role
+or installed/running cron. This is an unavailable host-test environment, not a
+claimed source-host pass. Preflight writes nothing and makes no network calls.
+
+Browser tests were attempted; Chromium still cannot load `libatk-1.0.so.0`.
+Site and Development Pond browser checks are skipped, not passed. No download,
+external search/contact, cron installation, deployment, staging, commit or push
+was performed. Native FreePBX installation/reboot scheduling, separate-host TLS,
+physical power-loss durability, runtime/registration/calls remain unverified.
+
+Assessment: **READY WITH EXPLICIT LIMITATIONS** for the three-server isolated
+procedure in `initial-test.md`, subject to its dependency, permission, transport,
+key/token custody and real-execution gates. Not production readiness.
+
+## Core Protection Lifecycle Pass (23 October 2026)
+
+The standalone `pond/` service is now implemented separately from the Development
+Pond. Existing Puddle revision storage, Stream hash detection/FIFO retry and native
+reconstruction were retained, not replaced. New work adds SQLite persistence,
+local scoped enrolment/revocation, request replay/freshness checks, AES-256-GCM
+credential escrow with an independent key, exact-password read-back, latest
+revision retrieval and a native-compatible protected recovery bundle. Explicit
+active secret references support rotation while retaining old queued versions.
+The supplied cron entry is administrator-installed; it was not installed here.
+
+`sh tools/check.sh` and `XDEBUG_MODE=off php tools/demo.php` both passed after
+this implementation. All existing reconstruction, revision, publication, provider,
+protection, federation, schema/hash, package and static-site checks remain enabled.
+The additional `tests/pond.php` starts a separate authenticated loopback service
+using real SQLite and OpenSSL encryption. It automatically captures synthetic
+configuration, detects a change and password rotation, verifies retained copies,
+deletes the entire source directory, restarts the Pond, retrieves with a different
+recovery token and reconstructs a clean simulated target with the exact original
+version-specific passwords. The test uses the same recovery-bundle writer as
+the CLI and the existing `FileSecrets`/`BuildExecutor`, not a substitute engine.
+
+Negative tests cover missing credentials before acknowledgement, tenant/PBX
+isolation, replay, request expiry, unknown/revoked tokens, immutable passwords,
+recovery-only permissions, wrong decryption keys, tampered GCM tags and password
+absence from database plaintext and service logs. Packages include a separate
+`respawn-pond-0.0.1.tgz`; runtime data/keys are excluded. Editor checks are clear.
+
+This is independent-process storage/encryption evidence, not independent-host,
+public TLS or FreePBX evidence. Browser checks were attempted and skipped because
+Chromium cannot load `libatk-1.0.so.0`; desktop/mobile rendering and keyboard
+behaviour remain unverified. No external endpoint was contacted, no packages
+were downloaded, no cron/services were installed and no deployment occurred.
+No FreePBX installation, scheduled host execution, native saved-state recovery,
+registration, calls/audio or hardware power-loss durability has been established.
+Earlier sections below are historical evidence and have not been overwritten.
+
+Assessment: **READY WITH EXPLICIT LIMITATIONS** for an authorised isolated
+FreePBX 17/independent Pond test following `docs/initial-test.md`, not production.
+Prerequisites are disposable compatible FreePBX hosts, trusted public-IPv4 HTTPS
+Pond transport, verified service/storage permissions, host cron installation and
+independent recovery-token/key custody. Private-only HTTPS remains blocked by the
+existing source transport policy; do not weaken it merely to pass a test.
+
+## Ecosystem Federation Pass (23 October 2026)
+
+The current full gate includes schema validation for stable Pond identity, River
+agreements/messages/receipts, recovery delegation and Lake inventory. The local
+`tests/federation.php` suite uses two or three separate temporary JSON stores and
+tests bilateral scope, immutable revisions and parent history, idempotent
+replication, receipt replay, tamper rejection, revocation, restart, tenant
+non-enumeration and retrieval after deleting the source Pond store. These are
+synthetic ledger tests. The caller-supplied peer identity is not cryptographic
+authentication; no River transport, mTLS/signatures, encryption, key rotation,
+production Lake or cross-Pond activation fencing is implemented.
+
+The Local Pond retain/retrieve RPC test uses authenticated loopback HTTP and
+synthetic bearer credentials. It is Development Pond evidence, not external
+retention. No live provider, Pond, River peer, Lake, FreePBX or Asterisk was
+contacted or tested.
+
+## Final Readiness Audit (23 October 2026)
+
+Environment observed: PHP CLI 8.3.33, Python 3.14.2 and Node.js 24.21.0. No
+`fwconsole`, FreePBX or Asterisk installation is available in this workspace.
+No live systems, providers, routing services or external test endpoints were
+contacted.
+
+`sh tools/check.sh` and `XDEBUG_MODE=off php tools/demo.php` completed
+successfully. The gate passed PHP lint; application/provider (97 checks),
+preflight, native-shaped reconstruction, build-chain (41 invariants), corrective,
+revision and protection suites; the authenticated Local Pond retention/retrieval
+contract; measurement input checks; independent schema/hash validation; site
+build; module/site package checks; extracted-package static links/assets; and
+`git diff --check`. Protection tests cover unchanged suppression, supported
+extension/PJSIP/credential-reference changes, A-to-B-to-A revisions, FIFO outages,
+crash/idempotency retry, provider changes, source-store deletion, and missing
+retention repair. These use synthetic stores/providers only. HTTPS retention and
+credential-vault tests use injected transport and reject simulated evidence. The
+Local Pond contract test uses separate loopback controller state and reports
+simulated storage. No host cron was installed; no real FreePBX, controller or
+vault was available. The demo remains synthetic.
+
+The module tarball contains exactly module source and its licence; the site ZIP
+contains no module PHP or Local Pond implementation. This verifies package
+construction and exclusions, not FreePBX installation or activation.
+
+Playwright Chromium could not start because `libatk-1.0.so.0` is missing. The
+repository's ignored browser-library bundle is absent, and this audit did not
+install system packages or contact external services to obtain it. Static site
+generation and local package links/assets passed. Desktop/mobile rendering,
+keyboard interaction, browser-driven Local Pond and visual screenshot checks
+remain unverified for this audit.
+
+## Correction Pass (23 October 2026)
+
+`sh tools/check.sh` completed successfully after the acknowledgement, revision,
+documentation and website corrections. PHP lint and synthetic application,
+preflight, native-shaped reconstruction, build-chain, corrective/provider and
+revision suites passed; the application suite reported 88 checks and the revision
+suite passed its acknowledgement-binding, rotated-secret, selected-catalogue,
+Revert and Regenerate regressions. Independent schema validation, canonical hash
+checks, measurement-input validation, static site generation, module/site package
+checks, extracted-package local links/assets and `git diff --check` passed.
+
+`XDEBUG_MODE=off php tools/demo.php` passed for two distinct synthetic PBXs and
+separate simulated targets. This is not native FreePBX or live provider evidence.
+
+The browser tests did not run: Playwright Chromium was downloaded, but its process
+could not start because this container lacks `libatk-1.0.so.0`; the documented
+ignored `build/browser-deps/` bundle is absent. Static link/asset validation still
+ran. The Local Pond browser integration was also skipped because Chromium was not
+launchable. Desktop/mobile rendering, keyboard interactions and browser-driven
+Local Pond behavior therefore remain unverified in this pass. No FreePBX,
+Asterisk, provider, SBC or live call/audio test was performed.
+
+## Historical Record (22 October 2026)
+
+The following records the earlier run without treating it as a result of this
+corrective pass.
+
 Date: 22 October 2026. Ubuntu 24.04.5 LTS dev container; PHP CLI 8.4.15,
 Python 3.14, Node.js present, Playwright 1.64.1 Chromium build 1248,
 Pillow 13.0.0, jsonschema 4.26.0. No FreePBX, Asterisk, production provider
