@@ -1,0 +1,41 @@
+{
+  "schema": "respawn.local-source-fixtures.v1",
+  "modules": {
+    "framework": "17.0.1",
+    "core": "17.0.1",
+    "ringgroups": "17.0.1",
+    "sipsettings": "17.0.1"
+  },
+  "sources": {
+    "pbx-alpha": {
+      "pbxId": "pbx-alpha",
+      "users": {
+        "1001": {"name": "Alpha 1001", "voicemail": "novm"},
+        "1002": {"name": "Alpha 1002", "voicemail": "novm"}
+      },
+      "devices": {
+        "1001": {"user": "1001", "description": "Alpha 1001", "authUsername": "Alpha-1001", "settings": {"context": "from-internal", "transport": "", "dtmfmode": "rfc4733", "allow": "ulaw,alaw", "disallow": "all", "direct_media": "no", "rtp_symmetric": "yes", "force_rport": "yes", "rewrite_contact": "yes", "max_contacts": 1, "remove_existing": "yes", "media_encryption": "no"}},
+        "1002": {"user": "1002", "description": "Alpha 1002", "authUsername": "Alpha-1002", "settings": {"context": "from-internal", "transport": "", "dtmfmode": "rfc4733", "allow": "ulaw,alaw", "disallow": "all", "direct_media": "no", "rtp_symmetric": "yes", "force_rport": "yes", "rewrite_contact": "yes", "max_contacts": 1, "remove_existing": "yes", "media_encryption": "no"}}
+      },
+      "ringGroups": [
+        {"number": "600", "description": "Alpha primary", "strategy": "ringall", "timeout": 20, "members": ["1001"], "destination": "601"},
+        {"number": "601", "description": "Alpha fallback", "strategy": "ringall", "timeout": 15, "members": ["1002"], "destination": "hangup"}
+      ]
+    },
+    "pbx-bravo": {
+      "pbxId": "pbx-bravo",
+      "users": {
+        "2001": {"name": "Bravo 2001", "voicemail": "novm"},
+        "2002": {"name": "Bravo 2002", "voicemail": "novm"}
+      },
+      "devices": {
+        "2001": {"user": "2001", "description": "Bravo 2001", "authUsername": "Bravo-2001", "settings": {"context": "from-internal", "transport": "", "dtmfmode": "rfc4733", "allow": "ulaw,alaw", "disallow": "all", "direct_media": "no", "rtp_symmetric": "yes", "force_rport": "yes", "rewrite_contact": "yes", "max_contacts": 1, "remove_existing": "yes", "media_encryption": "no"}},
+        "2002": {"user": "2002", "description": "Bravo 2002", "authUsername": "Bravo-2002", "settings": {"context": "from-internal", "transport": "", "dtmfmode": "rfc4733", "allow": "ulaw,alaw", "disallow": "all", "direct_media": "no", "rtp_symmetric": "yes", "force_rport": "yes", "rewrite_contact": "yes", "max_contacts": 1, "remove_existing": "yes", "media_encryption": "no"}}
+      },
+      "ringGroups": [
+        {"number": "700", "description": "Bravo primary", "strategy": "ringall", "timeout": 20, "members": ["2001"], "destination": "701"},
+        {"number": "701", "description": "Bravo fallback", "strategy": "ringall", "timeout": 15, "members": ["2002"], "destination": "hangup"}
+      ]
+    }
+  }
+}

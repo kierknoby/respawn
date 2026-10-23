@@ -1,5 +1,159 @@
 # Respawn for FreePBX 17
 
+## 0.0.1 Development Work In Progress
+
+### Corrective Review Pass Complete
+
+Branch `0-0-1_Dev`, HEAD `147925b01d56896b3addc328a5e85c21d8a606b6`,
+empty index and the existing unstaged work are preserved. The exact temporary
+full-review ZIP outside the repository was removed as requested; no new full-tree
+ZIP will be generated. This pass addresses provider-connection isolation,
+historical readiness visibility, session-independent GUI reconciliation,
+consistent v2 canonical hashing and actionable sanitised diagnostics. Focused
+regressions include revision-regression quarantine, secret/error redaction and
+lookup-only reconciliation versus explicit retry. Website typography/layout,
+responsive sizing, dedicated 404 metadata and Apache ErrorDocument packaging are
+validated locally. Reconstruction scope and live-integration limits remain
+unchanged; host mapping is not live-tested.
+
+### Reconstruction Strengthening Pass
+
+Starting state: branch `0-0-1_Dev`, HEAD
+`147925b01d56896b3addc328a5e85c21d8a606b6`, empty index and the existing
+unstaged scaffold preserved in `artifacts/reconstruction-pass-starting-source.tgz`.
+Review found that the original executor persists checkpoints only after its whole
+callback returns, checks later object conflicts after earlier mutations, and has
+no apply boundary. Its mock configuration stage bypasses the executor. The existing
+Ring Groups doubles mirror implementation arguments rather than independently
+establishing FreePBX semantics. These findings are fixed locally and documented in
+[the review record](docs/review-pass.md), not presented as live failures reproduced.
+
+Now implemented: a v2 selected Core user -> fixed PJSIP device -> fallback/primary
+Ring Groups chain, original-credential references, exact module-version preflight,
+file/directory-fsynced per-operation checkpoints, target locking, unknown-outcome
+reconciliation and one final apply/read-back boundary. The native source/target
+contract, 40 executor/secret/failure/restart/concurrency invariants and the expanded
+two-PBX demo pass locally. The existing suite now includes stricter timestamp,
+apply-evidence and request-binding checks and promotes warnings to failures.
+
+Pinned source inspected: Core `fb43dea0ba9133319a21e6ea9e2ee3c6f7bc61f0`
+(17.0.18.56), Ring Groups `3b6f9a90c3fe56d27d460fdc74a4dda24390fecc`
+(17.0.2.8), Framework `90929231b801d865556a57875ddd25a74d283f8d`
+(17.0.33.2). These are inspected source versions, not tested runtime versions.
+Current documentation, independently validated v2 schema and all ten website
+pages describe the same selected scope. No native
+FreePBX reconstruction, reload, endpoint registration, call, audio or takeover
+has been executed or verified here.
+
+This section records the current local scaffold work. The historical prototype
+description below is retained for context: its source is not available in this
+repository, and its reported lab results have not been independently reproduced.
+
+**Current architecture:** FreePBX configuration export -> versioned, executable
+reconstruction blueprint -> provider-authorised Respawn operation -> fresh PBX
+provisioning -> ordered module-by-module configuration reconstruction ->
+connectivity and SBC routing preparation -> verification -> policy-controlled
+activation. A blueprint must describe validated configuration operations, not
+merely inventory, backup locations or a recovery plan. Operations must use
+supported module interfaces, never unrestricted shell commands.
+
+Respawn is the GPLv3+ open-source **Connectivity** module. A separately licensed
+provider connector mediates external services. The Pond is our controller
+implementation; alternative providers and controllers must remain possible.
+Hosting automation, WHMCS service/billing reconciliation, DOMAINTAINS integration
+and SBC orchestration belong behind that provider boundary, not in module core.
+No private production implementation or credentials are available here.
+
+### Local Progress And Evidence
+
+| Area | Current evidence | Remaining work |
+| --- | --- | --- |
+| Baseline | Clean `0-0-1_Dev` branch inspected; README and GPL licence read | Preserve local, unstaged work throughout |
+| Existing source | Original repository contained only README and LICENSE | No earlier prototype implementation available |
+| Firewall intent | IPv4 /32 canonicalisation, deduplication, ordering, timestamp-independent hashing and mock publication regressions pass | Native Firewall and live enforcement unverified |
+| Read-only adapter boundary | Interface, explicit fixture source and fail-closed unavailable source added; syntax checked | Compatible FreePBX 17 runtime verification |
+| Local persistence | Per-operation fsync/rename/directory-fsync, target lock, corruption preservation and real-process interruption/concurrency checks pass | Native storage/power-loss guarantees and non-cooperating administrator writes unverified |
+| Reconstruction | V2 selected users -> fixed PJSIP devices -> dependent Ring Groups; original versioned secret refs; preflight, checkpoints, apply and source/target read-back contracts pass | Real FreePBX proof; installed modules/global SIP are prerequisites; trunks/routes/voicemail remain gaps |
+| Provider and operations | Persistent mock uses the actual planner/executor; connection-scoped state, retained original connections, readiness-expiry visibility, revision quarantine, explicit reconciliation/retry and sanitized diagnostics pass focused tests; neutral HTTPS profile validates original request, strict freshness and bound readiness receipts | Real TLS/provider integration, enrolment, signatures and private-service execution unverified |
+| FreePBX integration | Experimental metadata, Connectivity GUI, provider settings, lifecycle class, fwconsole and explicit reconstruction commands; PHP syntax passes | Actual installation, permissions, menu, CSRF/session and CLI integration checks |
+| Website | Ten static pages, 26 FAQs, public v2 schema, responsive section layouts, dedicated noindex 404 page and Apache ErrorDocument mapping in the cPanel ZIP; 22 extracted desktop/mobile HTTP/browser checks and screenshots | Not deployed; cPanel/Apache mapping, hosting and DNS behaviour unverified |
+| Reference projects | Native Dial-Tone, distinct AI Dial-Tone, rendered house reference and pinned FreePBX sources recorded | Private provider/service source unavailable |
+
+An unsigned experimental module archive and cPanel website package are built
+locally. Packaging and syntax do not establish FreePBX installability, live
+reconstruction, provider acceptance or recovery. This development scaffold does
+not complete the wider takeover objective.
+The table reflects files actually present, not intended changes. Run
+`sh tools/check.sh` for the current full local gate, including native-shaped
+source/target contracts, real-process checkpoint recovery and independent JSON
+Schema validation. Selected users/devices no longer need to pre-exist: they are
+recreated before the fallback and primary groups. Unsupported settings, missing
+original credentials, partial objects and conflicts block the build. Saved state,
+apply, runtime, registration and live call readiness are deliberately distinct.
+
+### Operational Objective And Safety
+
+The ambition is verified takeover **in minutes**, not a measured result. Record
+invocation-to-provisioned, configuration-ready, connectivity-ready,
+verified-takeover and successful inbound/outbound test-call milestones, including
+bidirectional audio evidence. Mock timestamps are not operational measurements.
+Real hosting, secrets, licences, numbering, endpoint reconnection and SBC control
+remain dependencies requiring explicit contracts and separately authorised lab
+testing. Existing calls and historical/media data are not recovered merely by
+rebuilding declarative configuration.
+
+Replacement creation, routing preparation and live activation are distinct.
+Rehearsal and standby must not redirect production traffic. Cancellation and
+operation-owned resource teardown must be retryable, preserve shared resources
+and require explicit active-routing disposition. Never silently fail back to an
+unhealthy source PBX or infer external success from a local submission.
+
+All current work is local development. Nothing is to be staged, committed,
+pushed, remotely published, deployed or executed against live infrastructure.
+No real FreePBX installation, reconstruction or takeover has been verified here.
+
+### Build, Demo And Review
+
+```sh
+python3 -m pip install -r requirements-dev.txt
+python3 -m playwright install chromium
+sh tools/check.sh
+XDEBUG_MODE=off php tools/demo.php
+```
+
+### Local Pond End-To-End Demonstration
+
+The isolated development reference controller is in
+[development/local-pond](development/local-pond/README.md). Start the real
+loopback HTTP service, persistent worker and browser console with
+`sh development/local-pond/bin/start.sh`; it prints the browser URL. Stop with
+`sh development/local-pond/bin/stop.sh` and reset only the marker-owned demo with
+`sh development/local-pond/bin/reset.sh`. This runs the shared Respawn Application,
+v2 provider envelopes, source adapter, BuildExecutor, protected synthetic secrets,
+checkpoint journal and simulated replacement target. Routing activation changes
+only the local routing model. It is not a FreePBX/Asterisk runtime, real provider,
+SIP, call/audio or production readiness evidence. Local Pond, its UI and credentials
+are excluded from both distributable packages; see the runbook for scenarios and
+the tested local-vs-simulated boundary.
+
+Chromium needs host libraries; see [validation](docs/validation.md) for this
+container's user-local library path. Open [the local site](build/site/index.html).
+Local packages are [the module archive](artifacts/respawn-0.0.1.tgz) and
+[the cPanel ZIP](artifacts/respawn-site-0.0.1.zip). Neither is published.
+
+Read [architecture](docs/architecture.md), [v2 fields/dependencies/interfaces and opt-in lab steps](docs/reconstruction-v2.md),
+[provider contracts](docs/provider-contracts.md), [real takeover dependencies/timings](docs/operational-path.md),
+[CLI/two-PBX demo](docs/cli-and-demo.md), [operation runbooks](docs/operations.md),
+[FreePBX development](docs/freepbx-development.md), [security](docs/security.md),
+[cPanel upload/rollback](docs/cpanel.md), [capabilities/roadmap](docs/capabilities-and-roadmap.md)
+and [reference inspection](docs/references.md). The [neutral HTTPS profile](docs/https-profile.md)
+defines the implemented public transport, not private endpoints. Final evidence and inventory are
+recorded in [the handover](docs/handover.md).
+
+---
+
+## Historical Prototype Context
+
 Respawn is an experimental FreePBX recovery and SIP edge control-plane project.
 
 At its simplest, Respawn is intended to become a small, controlled set of commands that allow a FreePBX system to report its current recovery and routing intent to an external controller known as **The Pond**.

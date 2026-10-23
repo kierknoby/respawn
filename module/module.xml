@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<module>
+  <rawname>respawn</rawname>
+  <name>Respawn</name>
+  <version>0.0.1</version>
+  <publisher>Respawn contributors</publisher>
+  <license>GPLv3+</license>
+  <licenselink>https://www.gnu.org/licenses/gpl-3.0.html</licenselink>
+  <category>Connectivity</category>
+  <description>Experimental declarative PBX reconstruction and provider orchestration. No production provider included.</description>
+  <supported><version>17.0</version></supported>
+  <depends><version>17.0</version><phpversion>8.2</phpversion><module>framework</module></depends>
+  <menuitems><respawn category="Connectivity">Respawn</respawn></menuitems>
+</module>
