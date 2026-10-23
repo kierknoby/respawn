@@ -1,5 +1,38 @@
 # Local Validation Results
 
+## Diagnostic Rotation CI Correction (23 October 2026)
+
+The failed `Respawn Scaffold Checks` run for commit `ebb8bb6` used Ubuntu 24.04
+and PHP 8.3.6. Its combined diagnostic-rotation assertion did not identify the
+failed condition. Splitting archive count, permissions and credential category
+reproduced the failure in a disposable non-root PHP 8.3.6 CLI container: four
+files were present, but cached `fileperms()` reported 0644. Descriptor-level
+`fstat()` and `fileperms()` after `clearstatcache(true, $path)` both reported
+the actual mode 0600. Credential categorisation was correct on all five rotations.
+PHP 8.3.33 did not exhibit this cached-mode discrepancy locally. The ownership
+helper's `fileowner()`/`filegroup()` checks after chmod can leave the pathname
+stat metadata cached on the older runtime; rotation also replaces the file at
+that same pathname. This was a stale test observation, not on-disk permission
+weakening or loss of archives.
+
+Only the protection test changed: it clears PHP's stat cache before checking
+each log's permissions, independently verifies four files (current plus three
+archives), and parses the event JSON to assert the exact safe credential-failure
+category. Numeric mode/file-count and category-match diagnostics disclose no
+credential values. The logger's restrictive modes, rotation and ownership logic
+are unchanged; no delay, permission relaxation or skipped assertion was added.
+
+After the correction, the protection test passed nine consecutive runs on
+PHP 8.3.6 with umasks 0002/0022/0077 (three each), and five on local PHP 8.3.33.
+Before correction, 18 local runs across those umasks with inherited and removed
+default ACLs passed, establishing why local execution alone missed the issue.
+`sh tools/check.sh`, `XDEBUG_MODE=off php tools/demo.php` and `git diff --check`
+passed locally: 97 checks, 41 reconstruction invariants and all non-browser gates.
+The mixed-root ownership test skipped on this non-root runner; browser suites
+skipped because Chromium cannot load `libatk-1.0.so.0`. The PHP 8.3.6 container
+verified the protection regression, not the complete hosted Ubuntu workflow.
+No commit, push or hosted run of the uncommitted correction was performed.
+
 ## Persistent Storage Ownership Correction (23 October 2026)
 
 Source correction adds service-directory owner/group inheritance for new state

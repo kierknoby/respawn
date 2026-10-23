@@ -230,9 +230,18 @@ try {
         $sourceState->protectionEvent(['state'=>'publication_failed','lastError'=>'SECRET_REFERENCE_UNRESOLVED']);
     }
     $logs = glob($root . '/source/protection.log*');
-    protectionAssert(count($logs) === 4 && (fileperms($root . '/source/protection.log') & 0077) === 0
-        && str_contains(file_get_contents($root . '/source/protection.log'), 'credentials_unavailable'),
-        'diagnostics rotate to three archives and remain private with a safe credential-failure category');
+    protectionAssert(count($logs) === 4,
+        'diagnostics retain the current log and three archives; observed files=' . count($logs));
+    foreach ($logs as $logPath) {
+        clearstatcache(true, $logPath);
+        $logMode = fileperms($logPath) & 0777;
+        protectionAssert(($logMode & 0077) === 0,
+            'diagnostics remain private; file=' . basename($logPath) . ' observed mode=' . sprintf('%04o', $logMode));
+    }
+    $logEvent = json_decode(trim(file_get_contents($root . '/source/protection.log')), true, 8, JSON_THROW_ON_ERROR);
+    protectionAssert(($logEvent['reason'] ?? null) === 'credentials_unavailable',
+        'diagnostics use the safe credential-failure category; category matches=' .
+        (($logEvent['reason'] ?? null) === 'credentials_unavailable' ? 'yes' : 'no'));
 
     $newProvider = new MockProvider($controllerState, 'pbx-alpha', true, null, 'mock-protection-v2:connection-change');
     $newConnectionCoordinator = new ProtectionReconciler($sourceState, $revisions, $newProvider, 'pbx-alpha', 300);

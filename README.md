@@ -1,4 +1,5 @@
 # Respawn for FreePBX 17
+⚠️ Not currently suitable for use in production
 
 Respawn is an experimental GPLv3+ FreePBX Connectivity module exploring rapid,
 on-demand reconstruction of a replacement PBX from a retained, validated
@@ -173,6 +174,11 @@ provider/corrective checks, schema and hash validation, website generation and
 package checks. Browser checks run when Playwright Chromium is launchable. On a
 local host where it cannot launch, the script reports the browser checks as
 skipped; CI provisions Chromium and treats browser-test failures as failures.
+
+Diagnostic rotation regression checks cover the current log and three private
+archives using fresh filesystem metadata, including a verified PHP 8.3.6 CI
+compatibility correction. Exact reproduction and test evidence are recorded in
+[validation history](docs/validation.md).
 
 The isolated [Local Pond development demo](development/local-pond/README.md) uses
 loopback HTTP, synthetic data and a simulated target. It is excluded from the
