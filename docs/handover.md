@@ -1,4 +1,4 @@
-# Respawn 0.1.0 Development Handover
+# Respawn 0.1.1 Development Handover
 
 ## Current Disposition
 
@@ -13,7 +13,7 @@ The working tree is intended to remain local. Do not stage, commit, push, publis
 deploy or run against a live PBX/provider without separate authorisation. Synthetic
 and contract tests do not establish live FreePBX, carrier, SBC or call behaviour.
 
-Respawn 0.1.0 includes public Stream and routing-control contracts with separate
+Respawn 0.1.1 includes public Stream and routing-control contracts with separate
 my-connect-style and Kamailio reference archives. These are provider-neutral
 examples, not dependencies or private-service compatibility claims. The
 Kamailio reference always blocks activation. Rebuild packages with

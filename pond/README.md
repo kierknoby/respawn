@@ -1,4 +1,4 @@
-# Standalone Pond 0.1.0
+# Standalone Pond 0.1.1
 
 An experimental, independently deployable retention service, not the Development
 Pond JSON ledger. PHP 8.2+, PDO SQLite, OpenSSL and a local POSIX filesystem are
@@ -20,11 +20,11 @@ Read-back checks canonical integrity; hashes are not signatures.
 
 ## Installation On A Separate Lab Server
 
-Build `artifacts/respawn-pond-0.1.0.zip` with `python3 tools/build_site.py` and
+Build `artifacts/respawn-pond-0.1.1.zip` with `python3 tools/build_site.py` and
 `python3 tools/package.py`. Verify the ZIP from `artifacts/` before transfer:
 
 ```sh
-(cd artifacts && sha256sum -c respawn-pond-0.1.0.zip.sha256)
+(cd artifacts && sha256sum -c respawn-pond-0.1.1.zip.sha256)
 ```
 
 The installer supports Debian 13 (including 13.7) only. It installs Nginx,
@@ -37,7 +37,7 @@ not a capacity certification. Use a local filesystem for SQLite.
 Extract the ZIP to `/opt/respawn-pond` and run preflight before installation:
 
 ```sh
-unzip -q respawn-pond-0.1.0.zip -d /opt
+unzip -q respawn-pond-0.1.1.zip -d /opt
 sh /opt/respawn-pond/pond/install.sh --preflight
 ```
 

@@ -1,7 +1,7 @@
-# Provider-Neutral Integrations 0.1.0
+# Provider-Neutral Integrations 0.1.1
 
 Respawn defines configuration, recovery data, contracts and evidence boundaries;
-operators provide hosting, telecommunications infrastructure and routing
+operators provide hosting, telecoms infrastructure and routing
 services. This is the BYOT principle: neither my-connect nor KAM1/Kamailio is a
 required runtime dependency. The reference packages contain no proprietary code,
 private addresses, credentials or deployment-specific identifiers.
@@ -91,9 +91,9 @@ python3 tools/build_site.py
 python3 tools/package.py
 ```
 
-The output includes `respawn-pond-0.1.0.zip`,
-`respawn-my-connect-reference-0.1.0.zip` and
-`respawn-kamailio-reference-0.1.0.zip`, with individual `.sha256` files and a
+The output includes `respawn-pond-0.1.1.zip`,
+`respawn-my-connect-reference-0.1.1.zip` and
+`respawn-kamailio-reference-0.1.1.zip`, with individual `.sha256` files and a
 combined `SHA256SUMS`. The standalone Pond archive contains neither reference
 integration. Verify each package before extracting it. The local artifact build
 is not a GitHub release; publication remains a separate authorised step.

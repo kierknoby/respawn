@@ -1,4 +1,4 @@
-# my-connect-reference 0.1.0
+# my-connect-reference 0.1.1
 
 This is a provider-neutral reference adapter for an external recovery-control
 service. It demonstrates how a controller can use Respawn's existing Stream
@@ -72,7 +72,7 @@ and GPLv3+ licence. Extract it in a private development directory, review the
 configuration, then run the adapter contract test:
 
 ```sh
-unzip -q respawn-my-connect-reference-0.1.0.zip -d /opt
+unzip -q respawn-my-connect-reference-0.1.1.zip -d /opt
 php /opt/respawn-my-connect-reference/integrations/my-connect-reference/tests/adapter.php
 ```
 

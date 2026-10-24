@@ -78,7 +78,7 @@ recovery readiness.
 
 These commands are for an authorised development FreePBX host only. Do not enable
 protection or configure a provider for this test. Use the normal local Module
-Admin upload/update workflow for the reviewed 0.1.0 package; do not install this
+Admin upload/update workflow for the reviewed 0.1.1 package; do not install this
 experimental build on a production PBX. The package is built in the repository:
 
 ```sh
@@ -87,7 +87,7 @@ python3 tools/package.py
 (cd artifacts && sha256sum -c SHA256SUMS)
 ```
 
-Transfer `artifacts/respawn-0.1.0.tgz` to the test host by the site's approved
+Transfer `artifacts/respawn-0.1.1.tgz` to the test host by the site's approved
 administrative process and install the module through FreePBX Module Admin.
 Confirm the installed version with Module Admin and the package's `module.xml`;
 do not rely on the still-installed 0.0.1 version from the reported failure. No

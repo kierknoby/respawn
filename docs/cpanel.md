@@ -29,7 +29,7 @@ Screenshots are in `artifacts/screenshots/`; the validation JSON is local only.
    hosting operator. Do not assume public_html or any inherited Apache configuration.
 2. Retain a dated private backup of existing site files outside the public document
    root and record permissions. Do not overwrite unrelated files or .htaccess rules.
-3. Upload `artifacts/respawn-site-0.1.0.zip` via File Manager to an appropriate
+3. Upload `artifacts/respawn-site-0.1.1.zip` via File Manager to an appropriate
    staging directory. Extract and inspect it before replacing the intended site.
    `index.html`, other HTML files, `.htaccess`, `assets/`, robots.txt and sitemap.xml
    belong directly at the archive root, with no extra site/ directory level. The

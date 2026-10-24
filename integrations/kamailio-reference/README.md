@@ -1,4 +1,4 @@
-# kamailio-reference 0.1.0
+# kamailio-reference 0.1.1
 
 This reference defines the boundary between Respawn recovery control and an
 operator's routing authority. Kamailio is one possible implementation; it is not
@@ -63,7 +63,7 @@ operator-managed control endpoint. The reference client is standalone and does
 not require the Respawn module or Kamailio to run its contract tests.
 
 ```sh
-unzip -q respawn-kamailio-reference-0.1.0.zip -d /opt
+unzip -q respawn-kamailio-reference-0.1.1.zip -d /opt
 php /opt/respawn-kamailio-reference/integrations/kamailio-reference/tests/routing-control.php
 ```
 

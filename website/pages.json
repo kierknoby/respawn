@@ -1,7 +1,7 @@
 {
   "index": {
     "title": "Respawn",
-    "eyebrow": "FREEPBX 17 / OPEN SOURCE / 0.1.0 PROTOTYPE",
+    "eyebrow": "FREEPBX 17 / OPEN SOURCE / 0.1.1 PROTOTYPE",
     "intro": "Revert locally. Regenerate configuration. Respawn when disaster strikes.",
     "description": "Protect supported FreePBX configuration locally and retain it independently. A working prototype, building towards on-demand recovery.",
     "welcome": {
@@ -51,7 +51,7 @@
   "why-respawn": {
     "title": "Why Respawn?",
     "eyebrow": "THE CASE FOR CONFIGURATION-LED RECOVERY",
-    "intro": "The server is replaceable. The telephone system needs a plan.",
+    "intro": "The server is replaceable. The phone system needs a plan.",
     "description": "We're building around independently retained, versioned configuration: a foundation for local undo, repair and replacement recovery, rather than a permanently maintained second PBX.",
     "sections": [],
     "essay": [
@@ -62,7 +62,7 @@
           "Recreating everything that made the old one work is another matter.",
           "That's the problem we're tackling.",
           "When a PBX fails, we shouldn't automatically need another complete PBX sitting somewhere waiting to take over.",
-          "We should be able to preserve its configuration independently, deploy a replacement when required and reconstruct the telephone system from information we already trust.",
+          "We should be able to preserve its configuration independently, deploy a replacement when required and reconstruct the phone system from information we already trust.",
           "**That's the idea behind Respawn.**",
           "Not another server to maintain.",
           "Not another copy of the operating system to keep updated.",
@@ -85,7 +85,7 @@
         "paragraphs": [
           "A mistaken configuration change isn't a disaster.",
           "A damaged configuration doesn't necessarily require replacing the server.",
-          "And losing the entire machine shouldn't necessarily mean rebuilding the telephone system manually.",
+          "And losing the entire machine shouldn't necessarily mean rebuilding the phone system manually.",
           "That's why we're developing three recovery operations.",
           "**Revert.** Return supported configuration to an earlier revision held locally in The Puddle. No Stream or Pond required.",
           "**Regenerate.** Reconstruct or reconcile supported configuration on an existing FreePBX installation using a validated blueprint.",

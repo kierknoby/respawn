@@ -121,7 +121,7 @@ recovery remains unimplemented.
 - **D / Geographic recovery:** selected revisions replicated to an independently
   operated region; region loss does not revoke authority automatically.
 - **E / Multi-provider:** peer contracts do not depend on shared hosting or
-  telecommunications vendors.
+  telecoms vendors.
 - **F / Managed fleet:** Lake presents delegated fleet metadata and actions;
   operators only see or act on explicitly granted resources.
 
