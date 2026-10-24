@@ -117,6 +117,42 @@ systemctl start respawn-pond-php-fpm.service
 HTTPS exposure remains controlled by the enabled Nginx site and host firewall
 policy. Use `--disable-https` to remove only the Pond site's symlink.
 
+### Existing Manual Pond Installation
+
+The capture RPC additions require two PHP source files only:
+`pond/Pond.php` and `module/src/Reconstruction/ConfigurationCapture.php`.
+`pond/public/index.php`, Nginx/FPM configuration, the SQLite schema, Pond
+identity, enrolments and encryption key do not change. The existing generic
+`provider-rpc.v2` dispatcher handles these methods, and existing `objects`
+storage holds them under a new `configurationCapture` kind. There is no database
+migration and do not run `init` on an existing Pond.
+
+For the earlier manual archive layout installed at `/opt/respawn-pond`, back up
+and replace only those source files during an operator-approved short PHP-FPM
+maintenance window. Set `POND_PACKAGE` to the extracted new package root:
+
+```sh
+POND_PACKAGE=/secure/staging/respawn-pond
+BACKUP=/root/respawn-pond-code-backup
+install -d -m 0700 "$BACKUP/pond" "$BACKUP/module/src/Reconstruction"
+cp -a /opt/respawn-pond/pond/Pond.php "$BACKUP/pond/Pond.php"
+cp -a /opt/respawn-pond/module/src/Reconstruction/ConfigurationCapture.php "$BACKUP/module/src/Reconstruction/ConfigurationCapture.php"
+install -o root -g root -m 0644 "$POND_PACKAGE/pond/Pond.php" /opt/respawn-pond/pond/Pond.php
+install -d -o root -g root -m 0755 /opt/respawn-pond/module/src/Reconstruction
+install -o root -g root -m 0644 "$POND_PACKAGE/module/src/Reconstruction/ConfigurationCapture.php" /opt/respawn-pond/module/src/Reconstruction/ConfigurationCapture.php
+php -l /opt/respawn-pond/pond/Pond.php
+php -l /opt/respawn-pond/module/src/Reconstruction/ConfigurationCapture.php
+```
+
+Restart only the currently active Pond PHP-FPM unit to clear OPcache; do not
+restart Kamailio, RTPengine or Nginx unless the existing host's deployment
+procedure specifically requires it. Check the active PHP-FPM unit name before
+the change. Verify `systemctl is-active` and `pond.php status` afterwards. To
+roll back, restore the two backed-up files with their previous owner/mode and
+restart that same PHP-FPM unit. Do not restore, replace or reinitialise the
+database or key. This compatibility update has not been performed on KAM1 in
+this workspace.
+
 ## Updates, Rollback And Removal
 
 Verify and extract a newer version to a staging directory, run its read-only

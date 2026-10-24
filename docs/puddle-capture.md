@@ -105,6 +105,69 @@ and listing to check journal persistence; no Asterisk restart is required.
 network activity. A failed collector reports a sanitised error; previous valid
 revisions remain listable.
 
+## Independent Pond Retention Prototype
+
+The 0.1.0 capture-retention RPC is separate from `retainRevision`, which accepts
+only executable reconstruction v2 blueprints. To publish a capture, configure an
+authorised HTTPS provider connection in Settings. An empty Ring Group scope and
+empty secret manifest are valid settings for this capture test. The Pond
+principal needs only the enrolled `retain` and `read` permissions for these two
+RPC methods; no escrow or recovery permission is used by capture-only retention.
+
+After a local capture, run as the FreePBX service account:
+
+```sh
+fwconsole respawn revision-list
+fwconsole respawn revision-publish --revision-id=REVISION_ID
+fwconsole respawn revision-show --revision-id=REVISION_ID
+fwconsole respawn revision-verify --revision-id=REVISION_ID
+```
+
+`revision-publish` sends the exact snapshot with a deterministic idempotency key,
+requires a durable receipt, immediately retrieves the same revision and verifies
+its canonical content hash, then records the acknowledgement/read-back on the
+local capture record. Retrying the same revision is safe. `revision-verify`
+performs read-back only and requires the current configured connection to match
+the stored acknowledgement. Both operations report `recoveryReady: false`; they
+do not escrow credentials, move executable recovery heads, invoke a reconstruction
+executor, alter FreePBX configuration or enable automatic protection. A
+`configuration_retained_and_readback_verified` result proves only independent
+retention of that exact local snapshot, not complete recovery.
+
+### Existing Pond Compatibility Update
+
+The deployed Pond implements the generic `provider-rpc.v2` dispatcher but does
+not yet recognise the two capture methods. The compatibility change is limited to
+`pond/Pond.php` and the new autoloaded
+`module/src/Reconstruction/ConfigurationCapture.php`. It stores captures as a
+new object kind in the existing SQLite `objects` table. It requires no table
+migration and does not change existing rows, the Pond identity, enrolments, master
+key, Nginx configuration or PHP-FPM pool.
+
+For the earlier manual archive layout with application root
+`/opt/respawn-pond`, make a protected code backup, install only those files from
+the 0.1.0 package, lint them, and restart only the already-running Pond PHP-FPM
+unit using its actual service name:
+
+```sh
+install -d -m 0700 /root/respawn-pond-code-backup
+cp -a /opt/respawn-pond/pond/Pond.php /root/respawn-pond-code-backup/Pond.php
+cp -a /opt/respawn-pond/module/src/Reconstruction/ConfigurationCapture.php /root/respawn-pond-code-backup/ConfigurationCapture.php
+install -o root -g root -m 0644 /staging/respawn-pond/pond/Pond.php /opt/respawn-pond/pond/Pond.php
+install -o root -g root -m 0644 /staging/respawn-pond/module/src/Reconstruction/ConfigurationCapture.php /opt/respawn-pond/module/src/Reconstruction/ConfigurationCapture.php
+php -l /opt/respawn-pond/pond/Pond.php
+php -l /opt/respawn-pond/module/src/Reconstruction/ConfigurationCapture.php
+systemctl list-units --type=service 'php*-fpm.service'
+```
+
+`/staging/respawn-pond` is the extracted ZIP's `respawn-pond/` directory;
+replace it with the actual staging path. Identify the running PHP-FPM unit used
+by the existing Pond pool from that output and restart that exact unit to clear
+OPcache. This procedure does not install the new Debian 13 service unit on KAM1.
+To roll back, restore the two backed-up files and restart the same PHP-FPM unit.
+Never run `init`, replace `pond.sqlite`, regenerate the key or change the
+deployed HTTPS service during this code-only update.
+
 ## Evidence And Limits
 
 `php tests/puddle-capture.php` uses synthetic PDO and FreePBX interface doubles.

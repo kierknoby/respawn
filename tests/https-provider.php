@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 use Respawn\Provider\HttpsProvider;
 use Respawn\Provider\ConnectionIdentity;
+use Respawn\Reconstruction\ConfigurationCapture;
 
 $resultOverride = null;
 $stale = false;
@@ -16,6 +17,40 @@ $transport = function (array $request) use (&$resultOverride, &$stale, &$wrongId
 };
 $https = new HttpsProvider($configuration, $transport);
 check($https->capabilities()['authorised'] === true, 'HTTPS adapter validates synthetic authenticated capability envelope without network');
+$captureBlueprint = \Respawn\Reconstruction\SimulatedPbx::blueprint('pbx-alpha');
+$captureModules = [];
+foreach ($captureBlueprint['modules'] as $name=>$version) { $captureModules[$name] = ['available'=>true,'version'=>$version,'discoveryState'=>'known']; }
+$captureCollections = ['core.users'=>['state'=>'captured','objects'=>[]],
+    'core.pjsip'=>['state'=>'captured','objects'=>[]],'ringgroups'=>['state'=>'captured','objects'=>[]]];
+foreach (\Respawn\Reconstruction\BuildSpec::plan($captureBlueprint) as $operation) {
+    $objectType = $operation['object']['type'];
+    $collection = match ($objectType) { 'user'=>'core.users','pjsip'=>'core.pjsip',default=>'ringgroups' };
+    $captureCollections[$collection]['objects'][] = ['id'=>$operation['object']['identity'],'type'=>$operation['adapter'],
+        'state'=>'captured','fields'=>$operation['parameters']];
+}
+$capture = ConfigurationCapture::create('pbx-alpha',$captureModules,$captureCollections,
+    ['state'=>'not_configured','references'=>[],'recoveryReady'=>false,'reasonCode'=>'SECRET_MANIFEST_MISSING'],
+    ['CREDENTIALS:SECRET_MANIFEST_MISSING']);
+$captureRevisionId = 'rev-' . str_repeat('f',32);
+$captureKey = hash('sha256',$https->connectionIdentity() . "\0pbx-alpha\0" . $captureRevisionId . "\0" . $capture['contentHash']);
+$resultOverride = ['state'=>'durably_retained_capture','ack'=>['pbxId'=>'pbx-alpha',
+    'connectionId'=>$https->connectionIdentity(),'revisionId'=>$captureRevisionId,'captureId'=>$captureRevisionId,
+    'contentHash'=>$capture['contentHash'],'idempotencyKey'=>$captureKey,'retentionReceipt'=>'capture-receipt-test',
+    'publicationId'=>'capture-publication-test','version'=>1,'recoveryReady'=>false]];
+$captureAck = $https->retainConfigurationCapture('pbx-alpha',$captureRevisionId,$capture);
+check(($captureAck['ack']['contentHash'] ?? '') === $capture['contentHash']
+    && ($captureAck['recoveryReady'] ?? true) === false,
+    'Stream accepts a durable capture receipt without upgrading its recovery-readiness claim');
+$resultOverride = ['state'=>'retained_configuration_capture','pbxId'=>'pbx-alpha',
+    'connectionId'=>$https->connectionIdentity(),'revisionId'=>$captureRevisionId,'ack'=>$captureAck['ack'],
+    'capture'=>$capture,'recoveryReady'=>false];
+$readBack = $https->retrieveConfigurationCapture('pbx-alpha',$captureRevisionId);
+check(($readBack['capture']['contentHash'] ?? '') === $capture['contentHash']
+    && ($readBack['capture'] ?? null) === $capture,
+    'Stream verifies exact independent capture read-back against the local content hash');
+$resultOverride['capture']['collections']['core.users']['objects'][0]['fields']['name'] = 'Changed after retention';
+rejects(fn () => $https->retrieveConfigurationCapture('pbx-alpha',$captureRevisionId),
+    'capture read-back rejects retained bytes with a mismatched canonical hash');
 $retainedBlueprint = \Respawn\Reconstruction\SimulatedPbx::blueprint('pbx-alpha');
 $retainedRevisionId = 'rev-' . str_repeat('a', 32);
 $retainedPublicationId = 'pub-' . str_repeat('b', 32);

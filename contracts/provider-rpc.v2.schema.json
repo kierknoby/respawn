@@ -18,7 +18,7 @@
       "properties": {
         "schema": { "const": "respawn.provider-rpc.v2" },
         "connectionId": { "$ref": "#/$defs/identity" },
-        "method": { "enum": ["capabilities", "status", "publish", "retainRevision", "retrieveRevision", "latestRevision", "escrowCredential", "retrieveCredential", "launch", "operation", "reconcile", "cancel", "activate", "teardown"] },
+        "method": { "enum": ["capabilities", "status", "publish", "retainRevision", "retrieveRevision", "latestRevision", "retainConfigurationCapture", "retrieveConfigurationCapture", "escrowCredential", "retrieveCredential", "launch", "operation", "reconcile", "cancel", "activate", "teardown"] },
         "pbxId": { "type": "string", "pattern": "^[a-zA-Z0-9._-]{1,80}$" },
         "parameters": { "type": "object" },
         "requestId": { "type": "string", "pattern": "^[a-f0-9]{32}$" },
@@ -32,7 +32,7 @@
       "properties": {
         "schema": { "const": "respawn.provider-rpc.v2" },
         "connectionId": { "$ref": "#/$defs/identity" },
-        "method": { "enum": ["capabilities", "status", "publish", "retainRevision", "retrieveRevision", "latestRevision", "escrowCredential", "retrieveCredential", "launch", "operation", "reconcile", "cancel", "activate", "teardown"] },
+        "method": { "enum": ["capabilities", "status", "publish", "retainRevision", "retrieveRevision", "latestRevision", "retainConfigurationCapture", "retrieveConfigurationCapture", "escrowCredential", "retrieveCredential", "launch", "operation", "reconcile", "cancel", "activate", "teardown"] },
         "pbxId": { "type": "string", "pattern": "^[a-zA-Z0-9._-]{1,80}$" },
         "ok": { "const": true },
         "observedAt": { "$ref": "#/$defs/timestamp" },

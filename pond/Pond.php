@@ -5,6 +5,7 @@ namespace Respawn\Pond;
 use PDO;
 use Respawn\Reconstruction\Blueprint;
 use Respawn\Reconstruction\BuildSpec;
+use Respawn\Reconstruction\ConfigurationCapture;
 use RuntimeException;
 
 final class Pond
@@ -160,6 +161,7 @@ final class Pond
         if (!$principal) { throw new RuntimeException('POND_UNAUTHORISED'); }
         $method = $request['method'] ?? '';
         $permission = ['retainRevision'=>'retain', 'retrieveRevision'=>'read', 'latestRevision'=>'read',
+            'retainConfigurationCapture'=>'retain', 'retrieveConfigurationCapture'=>'read',
             'escrowCredential'=>'escrow', 'retrieveCredential'=>'recover', 'capabilities'=>'read', 'status'=>'read'][$method] ?? null;
         if ($permission === null || !in_array($permission, json_decode($principal['permissions'], true), true)
             || ($request['schema'] ?? '') !== 'respawn.provider-rpc.v2'
@@ -247,6 +249,58 @@ final class Pond
             if ($method === 'retrieveCredential') { $result['secret'] = $this->decrypt($stored, $associated); }
             else { $result['idempotencyKey'] = $params['idempotencyKey']; }
             return $result;
+        }
+        if ($method === 'retainConfigurationCapture') {
+            $revisionId = $params['revisionId'] ?? '';
+            $capture = $params['payload'] ?? null;
+            if (!is_string($revisionId) || !preg_match('/^rev-[a-f0-9]{32}$/D', $revisionId)
+                || !is_array($capture) || ($params['pbxId'] ?? '') !== $pbx) {
+                throw new RuntimeException('PUDDLE_RETENTION_BINDING_INVALID');
+            }
+            ConfigurationCapture::verifyHash($capture);
+            $hash = $capture['contentHash'];
+            $idempotencyKey = hash('sha256', $connection . "\0" . $pbx . "\0" . $revisionId . "\0" . $hash);
+            if (($capture['sourcePbxId'] ?? '') !== $pbx || ($params['contentHash'] ?? '') !== $hash
+                || ($params['idempotencyKey'] ?? '') !== $idempotencyKey
+                || ($capture['credentials']['recoveryReady'] ?? true) !== false) {
+                throw new RuntimeException('PUDDLE_RETENTION_BINDING_INVALID');
+            }
+            $stored = $this->get($scope, 'configurationCapture', $revisionId);
+            if ($stored !== null && (($stored['capture']['contentHash'] ?? '') !== $hash
+                || ($stored['ack']['connectionId'] ?? '') !== $connection
+                || ($stored['ack']['idempotencyKey'] ?? '') !== $idempotencyKey)) {
+                throw new RuntimeException('PUDDLE_CAPTURE_IMMUTABLE_CONFLICT');
+            }
+            if ($stored === null) {
+                $version = (int) ($this->get($scope, 'configurationCaptureCounter', 'accepted')['version'] ?? 0) + 1;
+                $ack = ['pbxId'=>$pbx,'connectionId'=>$connection,'revisionId'=>$revisionId,'captureId'=>$revisionId,
+                    'contentHash'=>$hash,'idempotencyKey'=>$idempotencyKey,
+                    'retentionReceipt'=>'capture-receipt-' . bin2hex(random_bytes(16)),
+                    'publicationId'=>'capture-publication-' . bin2hex(random_bytes(16)),
+                    'version'=>$version,'at'=>gmdate(DATE_ATOM),'recoveryReady'=>false];
+                $stored = ['capture'=>$capture,'ack'=>$ack];
+                $this->put($scope, 'configurationCapture', $revisionId, $stored);
+                $this->put($scope, 'configurationCaptureCounter', 'accepted', ['version'=>$version], true);
+            }
+            return ['state'=>'durably_retained_capture','ack'=>$stored['ack'],
+                'credentialStatus'=>$capture['credentials']['state'],'recoveryReady'=>false];
+        }
+        if ($method === 'retrieveConfigurationCapture') {
+            $revisionId = $params['revisionId'] ?? '';
+            if (!is_string($revisionId) || !preg_match('/^rev-[a-f0-9]{32}$/D', $revisionId)
+                || ($params['pbxId'] ?? '') !== $pbx) { throw new RuntimeException('PUDDLE_RETRIEVAL_BINDING_INVALID'); }
+            $stored = $this->get($scope, 'configurationCapture', $revisionId);
+            if ($stored === null) { throw new RuntimeException('PUDDLE_RETAINED_CAPTURE_NOT_FOUND'); }
+            ConfigurationCapture::verifyHash($stored['capture']);
+            if (($stored['capture']['sourcePbxId'] ?? '') !== $pbx
+                || ($stored['ack']['connectionId'] ?? '') !== $connection
+                || ($stored['ack']['revisionId'] ?? '') !== $revisionId
+                || ($stored['ack']['contentHash'] ?? '') !== $stored['capture']['contentHash']) {
+                throw new RuntimeException('PUDDLE_RETRIEVAL_BINDING_INVALID');
+            }
+            return ['state'=>'retained_configuration_capture','pbxId'=>$pbx,'connectionId'=>$connection,
+                'revisionId'=>$revisionId,'ack'=>$stored['ack'],'capture'=>$stored['capture'],
+                'recoveryReady'=>false];
         }
         if ($method === 'latestRevision') {
             $head = $this->get($scope, 'head', 'latest');

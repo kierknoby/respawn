@@ -148,6 +148,65 @@ final class RevisionStore
         });
     }
 
+    public function markConfigurationCaptureRetained(string $source, string $revisionId,
+        string $connectionId, array $acknowledgement): void
+    {
+        $revision = $this->get($source,$revisionId);
+        if (($revision['captureKind'] ?? '') !== 'configuration_capture') { throw new RuntimeException('PUDDLE_CAPTURE_NOT_EXECUTABLE'); }
+        $captureHash = $revision['contentHash'];
+        $expectedKey = hash('sha256',$connectionId . "\0" . $source . "\0" . $revisionId . "\0" . $captureHash);
+        if ($connectionId === '' || ($acknowledgement['pbxId'] ?? '') !== $source
+            || ($acknowledgement['connectionId'] ?? '') !== $connectionId
+            || ($acknowledgement['revisionId'] ?? '') !== $revisionId
+            || ($acknowledgement['captureId'] ?? '') !== $revisionId
+            || ($acknowledgement['contentHash'] ?? '') !== $captureHash
+            || ($acknowledgement['idempotencyKey'] ?? '') !== $expectedKey
+            || !is_string($acknowledgement['retentionReceipt'] ?? null) || $acknowledgement['retentionReceipt'] === ''
+            || !is_string($acknowledgement['publicationId'] ?? null) || $acknowledgement['publicationId'] === ''
+            || !is_int($acknowledgement['version'] ?? null) || $acknowledgement['version'] < 1
+            || ($acknowledgement['recoveryReady'] ?? null) !== false) {
+            throw new RuntimeException('PUDDLE_DURABLE_ACK_INVALID');
+        }
+        $this->store->update(function (array &$state) use ($source,$revisionId,$connectionId,$acknowledgement): void {
+            $revision = &$state['revisions'][$source][$revisionId];
+            if (($revision['captureKind'] ?? '') !== 'configuration_capture') { throw new RuntimeException('PUDDLE_CAPTURE_NOT_EXECUTABLE'); }
+            if (isset($revision['retentionAcknowledgement'])
+                && $revision['retentionAcknowledgement'] !== $acknowledgement) {
+                throw new RuntimeException('PUDDLE_DURABLE_ACK_CONFLICT');
+            }
+            $revision['retentionConnectionId'] = $connectionId;
+            $revision['retentionAcknowledgement'] = $acknowledgement;
+            $revision['retentionState'] = 'durably_retained_unverified';
+            $revision['recordHash'] = self::recordHash($revision);
+        });
+    }
+
+    public function markConfigurationCaptureVerified(string $source, string $revisionId,
+        string $connectionId, array $acknowledgement, array $retainedCapture): void
+    {
+        $revision = $this->get($source,$revisionId);
+        if (($revision['captureKind'] ?? '') !== 'configuration_capture') { throw new RuntimeException('PUDDLE_CAPTURE_NOT_EXECUTABLE'); }
+        ConfigurationCapture::verifyHash($retainedCapture);
+        if (($retainedCapture['sourcePbxId'] ?? '') !== $source
+            || ($retainedCapture['contentHash'] ?? '') !== $revision['contentHash']
+            || ($revision['retentionConnectionId'] ?? '') !== $connectionId
+            || ($revision['retentionAcknowledgement'] ?? null) !== $acknowledgement
+            || ($acknowledgement['connectionId'] ?? '') !== $connectionId
+            || ($acknowledgement['revisionId'] ?? '') !== $revisionId
+            || ($acknowledgement['contentHash'] ?? '') !== $revision['contentHash']) {
+            throw new RuntimeException('PUDDLE_READBACK_MISMATCH');
+        }
+        $this->store->update(function (array &$state) use ($source,$revisionId,$connectionId,$acknowledgement): void {
+            $revision = &$state['revisions'][$source][$revisionId];
+            $revision['retentionState'] = 'independently_readback_verified';
+            $revision['retentionVerifiedAt'] = gmdate(DATE_ATOM);
+            $revision['retentionConnectionId'] = $connectionId;
+            $revision['retentionAcknowledgement'] = $acknowledgement;
+            $revision['recoveryReady'] = false;
+            $revision['recordHash'] = self::recordHash($revision);
+        });
+    }
+
     public function list(string $source): array
     {
         return $this->store->inspect(static function (array $state) use ($source): array {

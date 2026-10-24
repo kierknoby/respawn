@@ -27,6 +27,14 @@ durable receipt only after storage commits. The source retrieves the exact
 revision and verifies its canonical hash and credentials before marking it
 verified. A transmitted request or HTTP response alone is not an acknowledgement.
 
+Puddle `configuration-capture.v1` snapshots use separate
+`retainConfigurationCapture` and `retrieveConfigurationCapture` methods and a
+separate immutable object kind. The Pond retains the exact content-hash-bound
+snapshot; the source verifies the durable acknowledgement and exact read-back.
+These RPCs do not publish a reconstruction blueprint, escrow credentials or
+claim recovery readiness. Existing Pond tables are reused, so the feature needs
+no database schema, identity or encryption-key migration.
+
 The current network profile supports explicitly allowlisted, globally routable
 IPv4 HTTPS endpoints. Private-address and IPv6 destinations are deliberately
 unsupported by this client profile; the guard has not been weakened for local

@@ -12,7 +12,7 @@ class Respawn extends Command
     protected function configure()
     {
         $this->setName('respawn')->setDescription('Experimental Respawn configuration and operation controls')
-            ->addArgument('action', InputArgument::OPTIONAL, 'status, protection-status, protection-reconcile, storage-repair, verify, export, publish, blueprint, capabilities, respawn, operation, reconcile, reconcileSubmission, retrySubmission, cancel, teardown, activate, advance (mock only), plan, export-reconstruction, reconstruct', 'status')
+            ->addArgument('action', InputArgument::OPTIONAL, 'status, protection-status, protection-reconcile, storage-repair, verify, export, publish, blueprint, capabilities, respawn, operation, reconcile, reconcileSubmission, retrySubmission, cancel, teardown, activate, advance (mock only), plan, export-reconstruction, reconstruct, revision-capture, revision-list, revision-show, revision-publish, revision-verify', 'status')
             ->addArgument('area', InputArgument::OPTIONAL, 'firewall or blueprint', 'blueprint')
             ->addOption('force', null, InputOption::VALUE_NONE, 'Republish validated intent')
             ->addOption('id', null, InputOption::VALUE_REQUIRED, 'Operation ID')
@@ -46,6 +46,10 @@ class Respawn extends Command
                     (string) $input->getOption('confirmation'));
             } elseif ($action === 'revision-capture') {
                 $result = \FreePBX::Respawn()->captureLocalRevision($input->getOption('origin') ?: 'manual_capture');
+            } elseif ($action === 'revision-publish') {
+                $result = \FreePBX::Respawn()->publishLocalConfigurationCapture((string) $input->getOption('revision-id'));
+            } elseif ($action === 'revision-verify') {
+                $result = \FreePBX::Respawn()->verifyLocalConfigurationCapture((string) $input->getOption('revision-id'));
             } elseif ($action === 'revision-list') {
                 $result = \FreePBX::Respawn()->listLocalRevisions();
             } elseif ($action === 'revision-show') {

@@ -49,6 +49,14 @@ final class Diagnostic
         'CREDENTIAL_PROTECTION_UNAVAILABLE' => ['Configuration was captured, but credential protection could not be verified.', 'Review the protected manifest and credential diagnostics. This revision is not independently recoverable.'],
         'SOURCE_CREDENTIAL_UNAVAILABLE' => ['A discovered PJSIP device has no locally verifiable source credential.', 'Inspect the device and protected manifest. The captured configuration is not independently recoverable.'],
         'SECRET_REFERENCE_MISMATCH' => ['The protected manifest credential does not match the source device credential.', 'Correct the immutable secret reference through the approved secret workflow; do not replace the PBX credential during capture.'],
+        'PUDDLE_PROVIDER_NOT_CONFIGURED' => ['No provider connection is configured for independent capture retention.', 'Local capture remains available; configure an authorised HTTPS Pond connection before running revision-publish or revision-verify.'],
+        'PUDDLE_CAPTURE_REVISION_REQUIRED' => ['The selected revision is not a Puddle configuration capture.', 'Select a revision whose capture kind is configuration_capture; executable blueprints use their existing protection workflow.'],
+        'PUDDLE_CAPTURE_RETENTION_NOT_ACKNOWLEDGED' => ['The selected capture has no acknowledgement for this Pond connection.', 'Publish the same local capture revision and reconcile any unknown outcome before retrying.'],
+        'PUDDLE_DURABLE_ACK_INVALID' => ['The Pond acknowledgement is not bound to this capture, PBX and connection.', 'Do not report retention. Inspect the Pond compatibility update and retry the same revision after resolving the mismatch.'],
+        'PUDDLE_RETRIEVAL_BINDING_INVALID' => ['The Pond read-back does not match the requested capture acknowledgement.', 'Do not mark the capture verified. Reconcile the same revision and inspect the authenticated Pond response.'],
+        'PUDDLE_CAPTURE_SOURCE_MISMATCH' => ['The retained capture is bound to a different PBX or credential-readiness state.', 'Reject this result and verify the configured source identity and capture hash.'],
+        'PUDDLE_READBACK_MISMATCH' => ['The Pond read-back content hash differs from the local capture.', 'Do not mark independent retention verified; preserve both revision identifiers and investigate the Pond response.'],
+        'PUDDLE_RETENTION_OUTCOME_UNKNOWN' => ['The capture request outcome is unknown; the Pond may have committed before communication failed.', 'Retry or verify the same revision ID. The stable idempotency key makes an identical submission safe; do not create a new revision to resolve uncertainty.'],
         'OPERATION_NOT_FOUND_ON_CONNECTION' => ['The operation is not present on this provider connection.', 'Check the original connection record; do not retry management against the currently selected provider.'],
         'SUBMISSION_NOT_OWNED_OR_QUARANTINED' => ['The submission is not authorised for this PBX or its provider connection is unknown.', 'Use the owning PBX session or explicitly reconcile the quarantined legacy record.'],
         'SUBMISSION_ID_INVALID' => ['The local submission identifier is invalid.', 'Select a listed pending submission; do not post a request body or launch key.'],
@@ -98,6 +106,9 @@ final class Diagnostic
             return $message;
         }
         if ($message === 'MODULE_UNAVAILABLE' || $message === 'UNSUPPORTED_FREEPBX_VERSION') { return $message; }
+        if (in_array($stage, ['revision-publish','revision-verify'], true)
+            && (str_contains($message,'transport failed') || str_contains($message,'response rejected')
+                || str_contains($message,'outcome is unknown'))) { return 'PUDDLE_RETENTION_OUTCOME_UNKNOWN'; }
         if (str_contains($message, 'SECRET_MANIFEST_MISSING')) { return 'SECRET_MANIFEST_MISSING'; }
         if (str_contains($message, 'SECRET_MANIFEST_UNSAFE')) { return 'SECRET_MANIFEST_UNSAFE'; }
         if (str_contains($message, 'SECRET_REFERENCE_FILE_UNSAFE')) { return 'SECRET_REFERENCE_FILE_UNSAFE'; }

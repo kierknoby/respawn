@@ -71,6 +71,13 @@ captured revision is not an executable recovery blueprint. See the
 [Puddle capture guide](docs/puddle-capture.md) for scope, safety and FreePBX test
 commands.
 
+The 0.1.0 prototype can separately publish a capture-only revision through the
+existing authenticated Stream connection and read back the exact snapshot from
+Pond. This retention path does not turn the snapshot into an executable
+blueprint, escrow credentials or claim recovery readiness. The deployed Pond
+still requires the documented two-file compatibility update before it accepts
+these capture methods; no live Pond or FreePBX test has been performed.
+
 The intended recovery sequence is:
 
 1. Capture supported FreePBX module configuration with read-only exporters.

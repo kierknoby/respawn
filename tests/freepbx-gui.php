@@ -82,6 +82,19 @@ try {
         && ($sameCapture['state'] ?? '')==='configuration_unchanged'
         && ($initialCapture['revisionId'] ?? '')===($sameCapture['revisionId'] ?? ''),
         'manual local capture works with provider disabled, no configured Ring Group scope, no objects, and no credential manifest');
+    $identity=$module->settings()['identity'];
+    $module->saveSettings(['mode'=>'provider','identity'=>$identity,'intent'=>'rehearsal','activationPolicy'=>'none',
+        'providerConfiguration'=>['schema'=>'respawn.provider-config.v1','adapterId'=>'https-json-v1',
+            'endpoint'=>'https://pond.example.invalid/rpc','credentialRef'=>'/etc/respawn/source.token',
+            'sourcePbxId'=>$identity,'allowedHosts'=>['pond.example.invalid']],
+        'groups'=>'','secretManifest'=>'','protectionEnabled'=>false,'protectionIntervalSeconds'=>300]);
+    guiCheck(($module->settings()['mode'] ?? '')==='provider' && ($module->settings()['groups'] ?? null)===''
+        && ($module->settings()['secretManifest'] ?? null)==='',
+        'Pond connection can be configured without Ring Group scope or a credential manifest');
+    $module->saveSettings(['mode'=>'disabled','identity'=>$identity,'intent'=>'rehearsal','activationPolicy'=>'none',
+        'groups'=>'','secretManifest'=>'','protectionEnabled'=>false,'protectionIntervalSeconds'=>300,
+        'providerConfiguration'=>[]]);
+    $module->setCalls=0;
     guiCheck(method_exists($module,'doConfigPageInit') && (new ReflectionMethod($module,'doConfigPageInit'))->getNumberOfRequiredParameters()===1,
         'BMO page-init hook implements the required one-argument lifecycle');
     guiCheck(isset($_SESSION['respawn_csrf']) && isset($_SESSION['respawn_launch_key']),'page lifecycle initializes existing session CSRF and launch tokens');
@@ -143,12 +156,14 @@ try {
     foreach (['overview','protection','revisions','recovery','settings'] as $view) {
         guiCheck(\FreePBX\modules\Respawn::pageView($view)===$view && str_contains($page,"'".$view."'"),$view.' view is server-navigable');
     }
-    foreach (['revision-capture','revision-plan','revision-execute','revision-compare','capabilities','export','publish','verify',
+    foreach (['revision-capture','revision-publish','revision-verify','revision-plan','revision-execute','revision-compare','capabilities','export','publish','verify',
         'respawn','reconcileSubmission','retrySubmission','cancel','teardown','activate','refresh-status','protection-reconcile'] as $action) {
         $moduleSource=file_get_contents(__DIR__.'/../module/Respawn.class.php');
         $controllerSource=file_get_contents(__DIR__.'/../module/src/OperatorController.php');
+        $consoleSource=file_get_contents(__DIR__.'/../module/Console/Respawn.class.php');
         guiCheck(str_contains($page,'value="'.$action.'"') || str_contains($page,"'".$action."'")
-            || str_contains($moduleSource,"'".$action."'") || str_contains($controllerSource,"'".$action."'"),
+            || str_contains($moduleSource,"'".$action."'") || str_contains($controllerSource,"'".$action."'")
+            || str_contains($consoleSource,$action),
             $action.' remains accessible through the reorganized interface');
     }
     guiCheck(!str_contains($page,"REQUEST_METHOD'] === 'POST") && str_contains($page,'name="csrf"')

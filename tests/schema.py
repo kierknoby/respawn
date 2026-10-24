@@ -68,6 +68,9 @@ rpc_validator.validate({'schema':'respawn.provider-rpc.v2','connectionId':'https
     'method':'retainRevision','pbxId':'pbx-alpha','parameters':{},'requestId':'a'*32,
     'sentAt':'2026-10-24T12:00:00Z'})
 rpc_validator.validate({'schema':'respawn.provider-rpc.v2','connectionId':'https-v1:reference',
+    'method':'retainConfigurationCapture','pbxId':'pbx-alpha','parameters':{},'requestId':'b'*32,
+    'sentAt':'2026-10-24T12:00:00Z'})
+rpc_validator.validate({'schema':'respawn.provider-rpc.v2','connectionId':'https-v1:reference',
     'method':'retainRevision','pbxId':'pbx-alpha','ok':True,'observedAt':'2026-10-24T12:00:01Z',
     'expiresAt':'2026-10-24T12:01:00Z','result':{}})
 rpc_validator.validate({'ok':False,'error':'POND_REQUEST_REJECTED'})

@@ -8,6 +8,7 @@ use Respawn\Reconstruction\NativeProfile;
 use Respawn\Reconstruction\RevisionStore;
 use Respawn\Reconstruction\SimulatedPbx;
 use Respawn\Storage\JsonStateStore;
+use Respawn\Diagnostic;
 
 function puddleCheck(bool $condition, string $message): void
 {
@@ -119,6 +120,19 @@ try {
     $unchanged = $store->captureConfiguration($capture);
     puddleCheck($first['revisionId'] === $unchanged['revisionId'] && $unchanged['captureResult'] === 'unchanged',
         'first capture creates a local revision and unchanged capture reuses it');
+    $captureConnection = 'https-v1:test-connection';
+    $captureKey = hash('sha256',$captureConnection . "\0pbx-puddle\0" . $first['revisionId'] . "\0" . $capture['contentHash']);
+    $captureAck = ['pbxId'=>'pbx-puddle','connectionId'=>$captureConnection,'revisionId'=>$first['revisionId'],
+        'captureId'=>$first['revisionId'],'contentHash'=>$capture['contentHash'],'idempotencyKey'=>$captureKey,
+        'retentionReceipt'=>'synthetic-retention-receipt','publicationId'=>'synthetic-publication','version'=>1,
+        'recoveryReady'=>false];
+    $store->markConfigurationCaptureRetained('pbx-puddle',$first['revisionId'],$captureConnection,$captureAck);
+    $store->markConfigurationCaptureVerified('pbx-puddle',$first['revisionId'],$captureConnection,$captureAck,$capture);
+    $retainedLocal = $store->get('pbx-puddle',$first['revisionId']);
+    puddleCheck(($retainedLocal['retentionState'] ?? '') === 'independently_readback_verified'
+        && ($retainedLocal['recoveryReady'] ?? true) === false
+        && ($store->heads('pbx-puddle')['lastVerifiedRevisionId'] ?? null) === null,
+        'capture retention/read-back is recorded without marking executable or recovery-verified revision heads');
     $legacyBlueprint = SimulatedPbx::blueprint('pbx-puddle');
     $legacyCollections = ['core.users'=>['state'=>'captured','objects'=>[]],
         'core.pjsip'=>['state'=>'captured','objects'=>[]],'ringgroups'=>['state'=>'captured','objects'=>[]]];
@@ -271,6 +285,10 @@ try {
         puddleCheck($exception->getMessage() === 'PUDDLE_CAPTURE_NOT_EXECUTABLE',
             'configuration capture cannot be mistaken for an executable reconstruction blueprint');
     }
+    $retentionDiagnostic = Diagnostic::forThrowable(new RuntimeException('PUDDLE_READBACK_MISMATCH'),'revision-verify');
+    puddleCheck(($retentionDiagnostic['code'] ?? '') === 'PUDDLE_READBACK_MISMATCH'
+        && !str_contains(json_encode($retentionDiagnostic),'synthetic-original-secret'),
+        'capture-retention failures use a stable sanitised operator diagnostic');
     try { $store->markPublished('pbx-puddle',$first['revisionId'],[], 'provider-connection');
         throw new RuntimeException('Capture was published.'); }
     catch (RuntimeException $exception) {
