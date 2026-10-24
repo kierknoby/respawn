@@ -1,7 +1,7 @@
 # Provider-Neutral Integrations 0.1.1
 
 Respawn defines configuration, recovery data, contracts and evidence boundaries;
-operators provide hosting, telecommunications infrastructure and routing
+operators provide hosting, telecoms infrastructure and routing
 services. This is the BYOT principle: neither my-connect nor KAM1/Kamailio is a
 required runtime dependency. The reference packages contain no proprietary code,
 private addresses, credentials or deployment-specific identifiers.
