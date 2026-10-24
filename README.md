@@ -88,6 +88,8 @@ and optional-field absence. Evidence-shaped synthetic regressions pass; populate
 live capture/publication still awaits operator retesting. Credential readiness
 remains separate from configuration completeness. See the
 [capture upgrade procedure](docs/puddle-capture.md#existing-010-capture-correction).
+The live-identified `secret_origional` SIP keyword is excluded as credential
+material alongside `secret` and `md5_cred`; its changes do not affect capture hashes.
 
 The intended recovery sequence is:
 

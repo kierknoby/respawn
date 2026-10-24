@@ -184,6 +184,10 @@ try {
     $guiPbx->astman = new PuddleTestManager(['AMPUSER/7201/concurrency_limit'=>'3',
         'AMPUSER/7202/concurrency_limit'=>'3']);
     $guiPbx->Ringgroups->rows['7290']['elsewhere'] = 'synthetic-elsewhere';
+    foreach (['7201','7202'] as $number) {
+        $guiPbx->Database->prepare('INSERT INTO sip VALUES (?,?,?)')->execute(
+            [$number,'secret_origional','synthetic-original-credential']);
+    }
     $guiCapture = (new FreePbxConfigurationCollector($guiPbx,'pbx-puddle'))->capture();
     $guiRevision = $store->captureConfiguration($guiCapture);
     puddleCheck($guiRevision['managedScope']['complete'] === true
@@ -216,7 +220,7 @@ try {
         $settingsQuery = $guiPbx->Database->prepare('SELECT keyword, data FROM sip WHERE id = ?');
         $settingsQuery->execute([$guiDevice['id']]);
         $expectedSettings = $settingsQuery->fetchAll(PDO::FETCH_KEY_PAIR);
-        unset($expectedSettings['secret'],$expectedSettings['md5_cred']);
+        unset($expectedSettings['secret'],$expectedSettings['md5_cred'],$expectedSettings['secret_origional']);
         ksort($expectedSettings,SORT_STRING);
         puddleCheck($deviceFields['settings'] === $expectedSettings
             && $deviceFields['row']['hint_override'] === 'synthetic-hint'
@@ -228,6 +232,19 @@ try {
             && !array_key_exists('authUsername',$deviceFields),
             'device ' . $guiDevice['id'] . ' retains exact settings and relationships, without invented optional values or username');
     }
+    $guiPbx->Database->prepare('UPDATE sip SET data = ? WHERE keyword = ?')->execute(
+        ['synthetic-changed-original-credential','secret_origional']);
+    $originalCredentialChange = (new FreePbxConfigurationCollector($guiPbx,'pbx-puddle'))->capture();
+    $originalCredentialRevision = $store->captureConfiguration($originalCredentialChange);
+    $captureAndRevisionBytes = json_encode([$guiCapture,$originalCredentialChange,
+        $store->get('pbx-puddle',$originalCredentialRevision['revisionId'])], JSON_THROW_ON_ERROR);
+    puddleCheck(ConfigurationCapture::canonicalBytes($originalCredentialChange) === ConfigurationCapture::canonicalBytes($guiCapture)
+        && $originalCredentialChange['contentHash'] === $guiCapture['contentHash']
+        && $originalCredentialRevision['revisionId'] === $guiRevision['revisionId']
+        && !str_contains($captureAndRevisionBytes,'secret_origional')
+        && !str_contains($captureAndRevisionBytes,'synthetic-original-credential')
+        && !str_contains($captureAndRevisionBytes,'synthetic-changed-original-credential'),
+        'secret_origional is excluded from capture/publication source and stored revision; changing it alone preserves canonical bytes, hash and revision');
     $guiPbx->Database->exec("UPDATE users SET password = 'synthetic-user-password';
         UPDATE sip SET data = 'synthetic-md5-material' WHERE keyword = 'md5_cred';
         UPDATE sip SET data = 'synthetic-rotated-sip-secret' WHERE keyword = 'secret';");

@@ -195,7 +195,7 @@ final class FreePbxConfigurationCollector
         return ['row'=>$this->captureFields($row, self::DEVICE_FIELDS, [],
                 ['id','tech','dial','devicetype','user','description']),
             'settings'=>$this->captureFields($snapshot['settings'] ?? [], self::PJSIP_FIELDS,
-                ['secret','md5_cred'], ['sipdriver','account','dial','context']),
+                ['secret','md5_cred','secret_origional'], ['sipdriver','account','dial','context']),
             'ast'=>$this->captureFields($snapshot['ast'], self::DEVICE_AST_FIELDS)];
     }
 
