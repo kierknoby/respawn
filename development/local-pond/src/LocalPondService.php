@@ -167,7 +167,7 @@ final class LocalPondService
         return $this->store->update(function (array &$state) use ($pbxId, $connectionId, $fixture): array {
             $record = $state['providerConnections'][$connectionId][$pbxId] ?? [];
             $operations = array_values($record['operations'] ?? []);
-            return ['provider' => ['name' => 'Local Pond', 'environment' => 'DEVELOPMENT ONLY',
+            return ['provider' => ['name' => 'Development Pond', 'environment' => 'DEVELOPMENT ONLY',
                     'connectionId' => $connectionId, 'connectionState' => 'loopback_http',
                     'enrolmentState' => 'authorised'],
                 'source' => $fixture,

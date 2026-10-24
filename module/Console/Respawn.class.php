@@ -95,7 +95,7 @@ class Respawn extends Command
                 if ($action === 'protection-health' && (($result['schedulerState'] ?? '') !== 'recent' || empty($result['enabled']))) { return 1; }
                 return in_array($result['state'] ?? '', ['protected_and_current','not_configured'], true) ? 0 : 1;
             }
-            return in_array($result['state'] ?? '', ['failed','unknown','teardown_partial','configuration_export_failed',
+            return in_array($result['state'] ?? '', ['failed','unknown','teardown_partial','configuration_export_failed','configuration_capture_incomplete',
                 'publication_failed','changes_awaiting_publication','external_retention_unverified',
                 'credentials_unavailable','protection_stale'], true) ? 1 : 0;
         } catch (\Throwable $exception) {

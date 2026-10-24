@@ -16,13 +16,19 @@ reconstruction alone is not telephony recovery.
 
 ## Ecosystem
 
-Respawn's target architecture has five logical components: **The Puddle** (formerly the Local Pond) is the
-PBX-local supported-state and revision cache; **The Stream** detects changes and
-publishes exact revisions; **The Pond** independently retains blueprints and
-coordinates authorised recovery; **The River** is peer-to-peer federation between
-Ponds; **The Lake** is optional fleet visibility and coordination. The Lake is
-not a data plane, sole repository or recovery dependency. River peers do not need
-a shared database or hosting provider.
+Respawn's target architecture has five logical components: **The Puddle** captures
+and tracks supported configuration on the originating PBX; **The Stream** detects
+changes and securely publishes exact revisions; **The Pond** independently
+retains blueprints and protected recovery information for authorised retrieval; **The River** is
+peer-to-peer federation between Ponds; **The Lake** is optional fleet visibility
+and coordination. The Lake is not a data plane, sole repository or recovery
+dependency. River peers do not need a shared database or hosting provider.
+
+Respawn 0.1.0 includes two public reference integrations: a my-connect-style
+adapter for the existing Stream contract and a Kamailio routing-control client
+that blocks activation by default. Neither depends on the named infrastructure;
+the downloadable archives and limitations are documented in
+[provider integrations](docs/provider-integrations.md).
 
 The Puddle/Stream coordinator connects to an experimental standalone
 [Pond service](pond/README.md): SQLite retention, AES-256-GCM credential escrow,
@@ -50,6 +56,20 @@ voicemail media, call detail records, logs or other historical data unless a
 separate recovery service supplies it.
 
 ## Blueprint And Recovery Path
+
+The initial reconstruction profile is intentionally limited. Respawn's long-term
+objective is comprehensive FreePBX configuration recovery through progressively
+expanded module support, not a permanent limit to the current profile. Current,
+developing, planned and under-investigation coverage is listed in the
+[module coverage roadmap](docs/capabilities-and-roadmap.md#freepbx-module-coverage).
+No universal module compatibility or full reconstruction capability is claimed.
+
+The Puddle independently discovers the supported local profile without an
+external provider or configured Ring Group list. Empty supported collections are
+valid. Local configuration capture and secret verification are separate, and a
+captured revision is not an executable recovery blueprint. See the
+[Puddle capture guide](docs/puddle-capture.md) for scope, safety and FreePBX test
+commands.
 
 The intended recovery sequence is:
 
@@ -180,7 +200,7 @@ archives using fresh filesystem metadata, including a verified PHP 8.3.6 CI
 compatibility correction. Exact reproduction and test evidence are recorded in
 [validation history](docs/validation.md).
 
-The isolated [Local Pond development demo](development/local-pond/README.md) uses
+The isolated [Development Pond demonstration](development/local-pond/README.md) uses
 loopback HTTP, synthetic data and a simulated target. It is excluded from the
 module and website packages and does not prove FreePBX, SIP, call/audio or provider
 integration. The static site is built with `python3 tools/build_site.py`; packages
@@ -196,9 +216,10 @@ are generated under ignored `artifacts/` by `python3 tools/package.py`.
 3. Prove the implemented standalone Pond's immutable secret-reference continuity
    over authorised separate-host HTTPS, with independent key/token custody and
    the original source unavailable; current evidence is local independent-process
-   testing with synthetic PBX state.
-4. Expand supported reconstruction to trunks, inbound/outbound routes, numbering,
-   destinations and other required modules, with dependency and coverage checks.
+   testing with synthetic PBX state. The reproducible Pond ZIP is generated under
+   `artifacts/respawn-pond-0.1.0.zip` by the package command.
+4. Expand module-by-module reconstruction coverage according to the published
+   roadmap, with dependency, version-compatibility and coverage checks.
 5. Integrate provider-controlled replacement provisioning, connectivity and SBC
    preparation/activation under explicit authority fencing.
 6. Verify registration and independent inbound/outbound calls with bidirectional
@@ -212,9 +233,13 @@ Dependencies, proof requirements and sequencing are detailed in the
 
 - [Architecture](docs/architecture.md)
 - [Reconstruction profile and lab requirements](docs/reconstruction-v2.md)
+- [Puddle discovery, capture status and FreePBX test procedure](docs/puddle-capture.md)
 - [Initial FreePBX 17 source-to-target test](docs/initial-test.md)
 - [Capabilities and roadmap](docs/capabilities-and-roadmap.md)
 - [Provider contracts](docs/provider-contracts.md)
+- [Provider-neutral integrations and 0.1.0 packages](docs/provider-integrations.md)
+- [my-connect-style Stream reference](integrations/my-connect-reference/README.md)
+- [Kamailio routing-control reference](integrations/kamailio-reference/README.md)
 - [Complete ecosystem architecture](docs/ecosystem-architecture.md)
 - [River peer federation](docs/river-federation.md)
 - [Lake fleet management](docs/lake-fleet-management.md)

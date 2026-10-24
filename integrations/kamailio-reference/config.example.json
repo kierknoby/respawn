@@ -1,0 +1,7 @@
+{
+  "schema": "respawn.routing-control-client-config.v1",
+  "endpoint": "https://routing-control.example.invalid/respawn/routing-control",
+  "allowedHosts": ["routing-control.example.invalid"],
+  "credentialRef": "/etc/respawn/routing-control.token",
+  "activationEnabled": false
+}

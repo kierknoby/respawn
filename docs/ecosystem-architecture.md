@@ -30,7 +30,7 @@ THE POND -- independent controller and durable retained-revision service
 
 The repository includes an independently deployable **experimental standalone
 Pond** under `pond/`: SQLite retention, scoped enrolment/authentication, replay
-checks, AES-GCM escrow and source-independent recovery bundles. It is separate
+checks, AES-GCM escrow, authenticated status and source-independent recovery bundles. It is separate
 from the **Development Pond** under `development/local-pond/`, which remains a
 reference/simulation environment. Neither is a **production-verified Pond**;
 actual separate-host TLS, FreePBX and resilience tests remain outstanding.
@@ -41,7 +41,7 @@ actual separate-host TLS, FreePBX and resilience tests remain outstanding.
 | --- | --- | --- |
 | **The Puddle** | Local current valid supported blueprint, retained revisions, observation state, pins and pending outbox | The only copy needed for recovery; its state survives loss of the PBX |
 | **The Stream** | Scheduled inspection, canonical hash comparison, capture trigger, durable pending publication, retry, acknowledgement/retrieval verification and protection status | A permanent daemon, instant change events, or that an HTTP success means durable storage |
-| **The Pond** | Stable Pond identity, authenticated PBX enrollment, immutable retained revisions, credential policy and authorised recovery operations | A one-PBX-per-Pond restriction, provider-specific infrastructure, or complete PBX protection without scope evidence |
+| **The Pond** | Stable Pond identity, authenticated PBX enrolment, immutable retained revisions, credential policy, operational status and authorised recovery-material retrieval | A one-PBX-per-Pond restriction, provider-specific infrastructure, or complete PBX protection without scope evidence |
 | **The River** | Bilateral Pond federation, explicit scopes, immutable replica transactions, receipts, recovery delegation and reconciliation | Shared databases, a mandatory central relay, or permission to decrypt every tenant's secrets |
 | **The Lake** | Optional tenant/fleet inventory, delegated read and operator roles, policies and cross-Pond coordination | Sole storage, sole recovery authority, or a requirement for ordinary Pond/Stream operation |
 

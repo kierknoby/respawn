@@ -90,7 +90,7 @@ uses real local HTTP and the same public v2 request envelope. Its worker calls t
 shared Respawn application reconstruction planner/executor against a `SIMULATED`
 target, and its routing-model activation is not production readiness. The HTTPS
 adapter rejects explicit development/simulated operation and receipt markers;
-Local Pond evidence cannot satisfy its production activation checks.
+Development Pond evidence cannot satisfy its production activation checks.
 
 The application persists launch intent before I/O. Unknown responses leave the
 original request/key retryable, even after local policy changes. CLI supports

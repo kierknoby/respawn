@@ -2,9 +2,9 @@ limit_req_zone $binary_remote_addr zone=respawn_pond:10m rate=10r/s;
 
 server {
     listen 443 ssl;
-    server_name pond.example.invalid;
-    ssl_certificate /etc/respawn-pond/tls/fullchain.pem;
-    ssl_certificate_key /etc/respawn-pond/tls/privkey.pem;
+    server_name @POND_HOST@;
+    ssl_certificate @POND_CERT@;
+    ssl_certificate_key @POND_TLS_KEY@;
     ssl_protocols TLSv1.2 TLSv1.3;
     client_max_body_size 64k;
     client_body_timeout 10s;
@@ -12,10 +12,10 @@ server {
     location = /rpc {
         limit_req zone=respawn_pond burst=20 nodelay;
         include fastcgi_params;
-        fastcgi_param SCRIPT_FILENAME /opt/respawn-pond/pond/public/index.php;
+        fastcgi_param SCRIPT_FILENAME @POND_SCRIPT@;
         fastcgi_param HTTPS on;
         fastcgi_param HTTP_AUTHORIZATION $http_authorization;
-        fastcgi_pass unix:/run/php/respawn-pond.sock;
+        fastcgi_pass unix:/run/respawn-pond/php-fpm.sock;
     }
     location / { return 404; }
 }

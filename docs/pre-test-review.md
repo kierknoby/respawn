@@ -13,7 +13,7 @@ part of the work. Earlier validation history is preserved.
 | F3, diagnostics | Private rotating log, persisted invocation/success/failure/recovery fields, read-only missed/stalled health and strict non-current CLI exit status. Failure/retry/recovery tests retain the protected head. Status reads do not refresh heartbeat. External alerting needs independent monitoring. |
 | F4, ordering | Only a newly retained child of the current recovery head promotes. Historical/unordered requests retain without promotion; duplicates, conflicting lineage, A/B/C delayed arrivals, restart and explicit restored-source continuation are tested. Cached receipts require current-head read-back. |
 | F5, documentation | Development Pond, experimental standalone SQLite/AES-GCM Pond and production-verified deployment are distinguished. River/Lake scope is unchanged. |
-| F6, prerequisites | Read-only preflight checks PHP/extensions, optional permissions, source cron/account/path and recovered bundle integrity. Local Pond/recovery dependencies pass; real-host/public HTTPS checks remain outstanding. Key restoration and bundle disposal are documented. |
+| F6, prerequisites | Read-only preflight checks PHP/extensions, optional permissions, source cron/account/path and recovered bundle integrity. Development Pond/recovery dependencies pass; real-host/public HTTPS checks remain outstanding. Key restoration and bundle disposal are documented. |
 
 ## Storage And Migration
 

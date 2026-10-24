@@ -16,7 +16,7 @@ if ($remote !== '127.0.0.1' || !preg_match('/^127\.0\.0\.1:[0-9]{1,5}$/D', $host
     return;
 }
 if ($path === '/health' && ($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
-    echo json_encode(['service' => 'Local Pond', 'environment' => 'DEVELOPMENT ONLY', 'loopback' => true]);
+    echo json_encode(['service' => 'Development Pond', 'environment' => 'DEVELOPMENT ONLY', 'loopback' => true]);
     return;
 }
 if (!in_array($path, ['/rpc', '/alternate/rpc'], true) || ($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
@@ -45,7 +45,7 @@ try {
     echo json_encode($response, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
 } catch (Throwable $exception) {
     $code = preg_match('/^[A-Z0-9_]{3,64}$/D', $exception->getMessage()) ? $exception->getMessage() : 'LOCAL_POND_REQUEST_FAILED';
-    error_log('Local Pond diagnostic ' . json_encode(['code' => $code, 'method' => $envelope['method'] ?? 'unknown']));
+    error_log('Development Pond diagnostic ' . json_encode(['code' => $code, 'method' => $envelope['method'] ?? 'unknown']));
     http_response_code($code === 'LOCAL_POND_AUTH_FAILED' ? 401 : 409);
     $request = is_array($envelope ?? null) ? $envelope : [];
     echo json_encode(['schema' => 'respawn.provider-rpc.v2', 'connectionId' => $request['connectionId'] ?? '',

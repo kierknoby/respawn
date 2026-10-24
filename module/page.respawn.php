@@ -12,7 +12,7 @@ catch (Throwable $exception) {
     \Respawn\Diagnostic::log($diagnostic);
     ?>
     <section class="container-fluid" aria-labelledby="respawn-storage-title">
-      <h1 id="respawn-storage-title">Respawn <small>0.0.1 / Experimental</small></h1>
+      <h1 id="respawn-storage-title">Respawn <small>0.1.0 / Experimental</small></h1>
       <div class="alert alert-danger" role="alert"><strong>Respawn storage is unavailable.</strong>
         <p>Code: <code><?= htmlspecialchars($diagnostic['code'],ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8') ?></code></p>
         <p><?= htmlspecialchars($diagnostic['message'],ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8') ?></p>
@@ -115,7 +115,7 @@ $viewNames=['overview'=>'Overview','protection'=>'Protection','revisions'=>'Revi
 </style>
 <div class="container-fluid respawn-admin">
   <header class="respawn-section" aria-labelledby="respawn-title">
-    <h1 class="respawn-heading" id="respawn-title">Respawn <small>0.0.1 / Experimental</small></h1>
+    <h1 class="respawn-heading" id="respawn-title">Respawn <small>0.1.0 / Experimental</small></h1>
     <p class="respawn-subtitle">Automatic configuration protection and on-demand FreePBX reconstruction.</p>
     <div class="alert alert-<?= $escape($overallClass) ?>" role="status">
       <strong><?= $escape($overallLabel) ?></strong>
@@ -137,7 +137,12 @@ $viewNames=['overview'=>'Overview','protection'=>'Protection','revisions'=>'Revi
     <?php if (!empty($error['nextAction'])): ?><p><?= $escape($error['nextAction']) ?></p><?php endif ?>
     <?php if (!empty($error['correlationId'])): ?><small>Diagnostic reference: <?= $escape($error['correlationId']) ?></small><?php endif ?>
   </div><?php endif ?>
-  <?php if (is_array($result) && empty($error)): ?><div class="alert alert-info" role="status"><?= $escape($result['state'] ?? 'Request completed') ?></div><?php endif ?>
+  <?php if (is_array($result) && empty($error)): ?><div class="alert alert-info" role="status">
+    <strong><?= $escape($result['state'] ?? 'Request completed') ?></strong>
+    <?php if (array_key_exists('configurationComplete',$result)): ?><p>Supported configuration complete: <?= !empty($result['configurationComplete'])?'yes':'no' ?>.</p><?php endif ?>
+    <?php if (isset($result['credentialStatus'])): ?><p>Credential status: <?= $escape($result['credentialStatus']) ?>. Independent recovery readiness: <?= !empty($result['recoveryReady'])?'verified':'not established' ?>.</p><?php endif ?>
+    <?php if (!empty($result['blockingGaps']) && is_array($result['blockingGaps'])): ?><ul><?php foreach ($result['blockingGaps'] as $gap): ?><li><?= $escape($gap) ?></li><?php endforeach ?></ul><?php endif ?>
+  </div><?php endif ?>
 
   <?php if ($view === 'overview'): ?>
     <section class="respawn-section" aria-labelledby="overview-heading">
@@ -203,6 +208,13 @@ $viewNames=['overview'=>'Overview','protection'=>'Protection','revisions'=>'Revi
         <div class="col-md-4"><section class="panel panel-default"><div class="panel-heading"><h3 class="panel-title">The Pond</h3></div><div class="panel-body">
           <p>Independent retention and authorised recovery storage.</p>
           <dl><dt>Connection</dt><dd><?= $escape($status['providerStatus'] ?? 'Not configured') ?></dd>
+            <dt>Pond identity</dt><dd class="respawn-id"><code><?= $escape($status['pondId'] ?? 'Unavailable') ?></code></dd>
+            <dt>Storage health</dt><dd><?= $escape($status['storageHealth'] ?? 'Unavailable') ?></dd>
+            <dt>Last retained revision</dt><dd class="respawn-id"><code><?= $escape($status['lastReceivedRevisionId'] ?? 'Unavailable') ?></code></dd>
+            <dt>Retained configuration hash</dt><dd class="respawn-id"><code><?= $escape($status['configurationHash'] ?? 'Unavailable') ?></code></dd>
+            <dt>Last successful retention</dt><dd><?= $escape($status['lastSuccessfulRetentionAt'] ?? 'Unavailable') ?></dd>
+            <dt>Recovery information</dt><dd><?= !array_key_exists('recoveryInformationAvailable',$status)?'Unavailable':(!empty($status['recoveryInformationAvailable'])?'Available':'Not verified') ?></dd>
+            <dt>Credential references verified</dt><dd><?= !array_key_exists('retainedCredentialReferencesVerified',$status)?'Unavailable':(!empty($status['retainedCredentialReferencesVerified'])?'Yes':'No') ?></dd>
             <dt>Last acknowledged</dt><dd class="respawn-id"><code><?= $escape($protection['latestProviderAcknowledgedRevisionId'] ?? 'none') ?></code></dd>
             <dt>Verified revision</dt><dd class="respawn-id"><code><?= $escape($protection['latestVerifiedRevisionId'] ?? 'none') ?></code></dd>
             <dt>Retention check</dt><dd><?= $escape($protection['lastRetentionVerification']['state'] ?? 'Not verified') ?></dd>
@@ -298,8 +310,8 @@ $viewNames=['overview'=>'Overview','protection'=>'Protection','revisions'=>'Revi
           <div class="form-group"><label for="respawn-host">Allowed hostname</label><input class="form-control respawn-field" id="respawn-host" name="allowedHost" value="<?= $escape($settings['providerConfiguration']['allowedHosts'][0] ?? '') ?>"></div>
           <div class="form-group"><label for="respawn-provider-credential">Protected provider credential file</label><input class="form-control respawn-field" id="respawn-provider-credential" name="credentialRef" value="<?= $escape($settings['providerConfiguration']['credentialRef'] ?? '') ?>"><p class="help-block">Absolute protected file path only; no token value.</p></div>
         </fieldset>
-        <fieldset><legend>Protected configuration scope</legend><div class="form-group"><label for="respawn-groups">Ring Groups</label><input class="form-control respawn-field" id="respawn-groups" name="groups" value="<?= $escape($settings['groups'] ?? '600,601') ?>"></div>
-          <div class="form-group"><label for="respawn-manifest">Protected secret manifest path</label><input class="form-control respawn-field" id="respawn-manifest" name="secretManifest" value="<?= $escape($settings['secretManifest'] ?? '') ?>"><p class="help-block">Contains references and protected file paths, never secret values.</p></div>
+        <fieldset><legend>Provider protection and reconstruction scope</legend><div class="form-group"><label for="respawn-groups">Ring Groups</label><input class="form-control respawn-field" id="respawn-groups" name="groups" value="<?= $escape($settings['groups'] ?? '600,601') ?>"><p class="help-block">Used for selected reconstruction and provider protection. Local Puddle capture discovers existing Ring Groups automatically and does not require this list.</p></div>
+          <div class="form-group"><label for="respawn-manifest">Protected secret manifest path</label><input class="form-control respawn-field" id="respawn-manifest" name="secretManifest" value="<?= $escape($settings['secretManifest'] ?? '') ?>"><p class="help-block">Credential verification for recovery. Local non-secret discovery can proceed without it. Contains references and protected file paths, never secret values.</p></div>
         </fieldset>
         <fieldset><legend>Automatic protection</legend><div class="checkbox"><label><input type="checkbox" name="protectionEnabled" value="1" <?= !empty($settings['protectionEnabled'])?'checked':'' ?>> Enable scheduled reconciliation</label></div>
           <div class="form-group"><label for="respawn-interval">Inspection interval</label><select class="form-control respawn-field" id="respawn-interval" name="protectionIntervalSeconds"><?php foreach ([300=>'5 minutes',600=>'10 minutes',900=>'15 minutes',1800=>'30 minutes',3600=>'1 hour'] as $seconds=>$label): ?><option value="<?= $seconds ?>" <?= (int)($settings['protectionIntervalSeconds'] ?? 300)===$seconds?'selected':'' ?>><?= $escape($label) ?></option><?php endforeach ?></select></div>

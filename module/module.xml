@@ -2,7 +2,7 @@
 <module>
   <rawname>respawn</rawname>
   <name>Respawn</name>
-  <version>0.0.1</version>
+  <version>0.1.0</version>
   <publisher>Respawn contributors</publisher>
   <license>GPLv3+</license>
   <licenselink>https://www.gnu.org/licenses/gpl-3.0.html</licenselink>

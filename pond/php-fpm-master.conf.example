@@ -1,0 +1,5 @@
+[global]
+daemonize = no
+error_log = /proc/self/fd/2
+pid = @POND_PID@
+include = @POND_POOL@

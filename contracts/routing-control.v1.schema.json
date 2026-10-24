@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://respawn.in1.click/contracts/routing-control.v1.schema.json",
+  "title": "Respawn provider-neutral recovery routing control v1",
+  "description": "Request/receipt vocabulary for an independently operated routing authority. Presence of evidence is not proof of its truth; the authority must verify evidence, scope, freshness and fencing before any activation.",
+  "oneOf": [
+    { "$ref": "#/$defs/request" },
+    { "$ref": "#/$defs/receipt" }
+  ],
+  "allOf": [
+    {
+      "if": { "properties": { "action": { "const": "activate" } }, "required": ["action"] },
+      "then": {
+        "properties": {
+          "readinessEvidence": {
+            "minItems": 10,
+            "maxItems": 10,
+            "allOf": [
+              { "contains": { "properties": { "check": { "const": "blueprintCoverage" }, "state": { "const": "passed" } }, "required": ["check", "state"] } },
+              { "contains": { "properties": { "check": { "const": "reconstruction" }, "state": { "const": "passed" } }, "required": ["check", "state"] } },
+              { "contains": { "properties": { "check": { "const": "apply" }, "state": { "const": "passed" } }, "required": ["check", "state"] } },
+              { "contains": { "properties": { "check": { "const": "configurationMatch" }, "state": { "const": "passed" } }, "required": ["check", "state"] } },
+              { "contains": { "properties": { "check": { "const": "connectivity" }, "state": { "const": "passed" } }, "required": ["check", "state"] } },
+              { "contains": { "properties": { "check": { "const": "routingPreparation" }, "state": { "const": "passed" } }, "required": ["check", "state"] } },
+              { "contains": { "properties": { "check": { "const": "registration" }, "state": { "const": "passed" } }, "required": ["check", "state"] } },
+              { "contains": { "properties": { "check": { "const": "inboundCall" }, "state": { "const": "passed" } }, "required": ["check", "state"] } },
+              { "contains": { "properties": { "check": { "const": "outboundCall" }, "state": { "const": "passed" } }, "required": ["check", "state"] } },
+              { "contains": { "properties": { "check": { "const": "bidirectionalAudio" }, "state": { "const": "passed" } }, "required": ["check", "state"] } }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "state": { "const": "active" } }, "required": ["state"] },
+      "then": { "required": ["activationReceipt", "evidenceRef"] }
+    },
+    {
+      "if": { "properties": { "state": { "enum": ["prepared", "verified"] } }, "required": ["state"] },
+      "then": { "required": ["evidenceRef"] }
+    },
+    {
+      "if": { "properties": { "state": { "enum": ["blocked", "unavailable", "unknown"] } }, "required": ["state"] },
+      "then": { "required": ["failureCode"] }
+    }
+  ],
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-zA-Z0-9._:-]{1,128}$" },
+    "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["check", "state", "evidenceRef", "observedAt", "expiresAt"],
+      "properties": {
+        "check": { "enum": ["blueprintCoverage", "reconstruction", "apply", "configurationMatch", "connectivity", "routingPreparation", "registration", "inboundCall", "outboundCall", "bidirectionalAudio"] },
+        "state": { "enum": ["passed", "failed", "unknown"] },
+        "evidenceRef": { "$ref": "#/$defs/id" },
+        "observedAt": { "$ref": "#/$defs/timestamp" },
+        "expiresAt": { "$ref": "#/$defs/timestamp" }
+      }
+    },
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "action", "operationId", "pbxId", "targetId", "blueprintHash", "expectedRevision", "authorityEpoch", "idempotencyKey", "readinessEvidence"],
+      "properties": {
+        "schema": { "const": "respawn.routing-control.v1" },
+        "action": { "enum": ["prepare", "verify", "activate"] },
+        "operationId": { "$ref": "#/$defs/id" },
+        "pbxId": { "$ref": "#/$defs/id" },
+        "targetId": { "$ref": "#/$defs/id" },
+        "blueprintHash": { "$ref": "#/$defs/hash" },
+        "expectedRevision": { "type": "integer", "minimum": 1 },
+        "authorityEpoch": { "type": "integer", "minimum": 1 },
+        "idempotencyKey": { "$ref": "#/$defs/hash" },
+        "readinessEvidence": { "type": "array", "items": { "$ref": "#/$defs/evidence" } }
+      }
+    },
+    "receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "action", "state", "operationId", "pbxId", "targetId", "blueprintHash", "revision", "authorityEpoch", "observedAt", "expiresAt"],
+      "properties": {
+        "schema": { "const": "respawn.routing-control.v1" },
+        "action": { "enum": ["prepare", "verify", "activate"] },
+        "state": { "enum": ["prepared", "verified", "active", "blocked", "unavailable", "unknown"] },
+        "operationId": { "$ref": "#/$defs/id" },
+        "pbxId": { "$ref": "#/$defs/id" },
+        "targetId": { "$ref": "#/$defs/id" },
+        "blueprintHash": { "$ref": "#/$defs/hash" },
+        "revision": { "type": "integer", "minimum": 1 },
+        "authorityEpoch": { "type": "integer", "minimum": 1 },
+        "observedAt": { "$ref": "#/$defs/timestamp" },
+        "expiresAt": { "$ref": "#/$defs/timestamp" },
+        "evidenceRef": { "$ref": "#/$defs/id" },
+        "activationReceipt": { "$ref": "#/$defs/id" },
+        "failureCode": { "type": "string", "pattern": "^[A-Z0-9_]{3,64}$" }
+      }
+    }
+  }
+}

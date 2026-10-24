@@ -1,4 +1,4 @@
-# Respawn 0.0.1 Architecture
+# Respawn 0.1.0 Architecture
 
 ## Centre Of Gravity
 
@@ -33,10 +33,11 @@ traffic; this diagram does not assert a private network topology.
 | Infrastructure/connectivity adapters | Provider-owned execution and resource receipts | Prepared routing is already active |
 | SIP edge | Enforce authorised controller policy and report effective state | A PBX may directly authorise arbitrary routes |
 
-The Pond is the independent controller/retention role in the ecosystem; it is not
-bound to one hosting or telecommunications provider. `development/local-pond/` is
-a development-only reference Pond, not the production controller and not The
-Puddle. Compatible independent providers implement the public contracts. No
+The Pond is the independent retention and authorised recovery-material retrieval
+service in the ecosystem; it is not bound to one hosting or telecommunications provider. `development/local-pond/`
+is a development-only **Development Pond** reference, not the production
+controller and not The Puddle. Compatible independent providers implement the
+public contracts. No
 production-certified retention service is included. The separate experimental
 `pond/` service implements SQLite retention and encrypted credential custody;
 its independent-process evidence uses synthetic PBX state. Hosting and SBC details remain behind
@@ -86,7 +87,7 @@ Independent recovery credentials retrieve a protected bundle consumed by the
 existing `FileSecrets` and reconstruction executor. The source-loss test uses a
 separate HTTP process and real encryption/storage, but synthetic source/target.
 Public TLS deployment, FreePBX scheduling and native execution remain lab gates.
-Mock/Local Pond/injected evidence cannot become `protected_and_current`.
+Mock/Development Pond/injected evidence cannot become `protected_and_current`.
 
 The five ecosystem components and their target topology are specified in
 [ecosystem-architecture.md](ecosystem-architecture.md). River federation is
@@ -97,16 +98,16 @@ only; no Lake service is implemented. See the separate River, Lake and
 [recovery-authority](recovery-authority.md) documents for explicit limits.
 
 `development/local-pond/` is a separately implemented development reference
-controller, not module core and not the closed-source production controller. Its
+controller, not module core and not the standalone Pond service. Its
 operator UI, persistent service and worker bind only to loopback, speak the public
 v2 JSON envelope over real local HTTP, and are excluded from both distributable
 archives. The shared `Application` submits operations through its provider
-interface; Local Pond queues persisted jobs and invokes the same v2 planner,
+interface; the Development Pond queues persisted jobs and invokes the same v2 planner,
 `BuildExecutor`, `FileSecrets` and simulated target adapter used by reconstruction
 tests. Its simulated routing model can change state and read the reconstructed
 Ring Groups, but never generates production registration/call/audio receipts.
 Production HTTPS verification rejects explicit development/simulated evidence.
-See the [Local Pond runbook](../development/local-pond/README.md) for tested
+See the [Development Pond runbook](../development/local-pond/README.md) for tested
 commands, recovery scenarios and the evidence boundary.
 
 V2 builds use a target-wide advisory lock, pre-mutation per-object checkpoints,

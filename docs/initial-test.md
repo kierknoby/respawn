@@ -16,6 +16,11 @@ Registration and internal calls are optional independent lab checks, not Respawn
 verification features. No external inbound/outbound call or recovery-time target
 is in scope.
 
+For independent local discovery without provider configuration, a Ring Group
+scope or a secret manifest, see [Puddle configuration capture](puddle-capture.md).
+That capture is distinct from executable reconstruction v2 and does not by itself
+establish recoverability.
+
 ## Protection Lifecycle Readiness
 
 The module now has a configurable reconciliation coordinator and the command
@@ -262,7 +267,7 @@ firewall, endpoint transport and licensing setup are not reconstructed.
 
 Install and activate the unsigned development module on both systems using the
 FreePBX Module Admin local-upload workflow and the locally generated
-`artifacts/respawn-0.0.1.tgz`. Confirm its Connectivity menu entry and that
+`artifacts/respawn-0.1.0.tgz`. Confirm its Connectivity menu entry and that
 `fwconsole respawn status` runs. This is a test step, not evidence that packaging
 or installation is generally supported. If upload, installation, activation,
 menu access or CLI discovery fails, stop and record it; do not work around module

@@ -1,9 +1,10 @@
-# Standalone Pond 0.0.1
+# Standalone Pond 0.1.0
 
 An experimental, independently deployable retention service, not the Development
 Pond JSON ledger. PHP 8.2+, PDO SQLite, OpenSSL and a local POSIX filesystem are
 required; recovery additionally needs PHP cURL. No cloud or proprietary service
-is required. This is ready for an isolated deployment test, not production use.
+is required. Neither my-connect nor Kamailio is required. This is ready for an
+isolated deployment test, not production use.
 
 The service uses SQLite transactions (`synchronous=FULL`, rollback journal),
 immutable tenant/PBX/revision records, a persisted Pond identity, and AES-256-GCM
@@ -19,50 +20,152 @@ Read-back checks canonical integrity; hashes are not signatures.
 
 ## Installation On A Separate Lab Server
 
-Build `artifacts/respawn-pond-0.0.1.tgz` with `python3 tools/package.py` after
-building the website. The archive contains this directory, shared module code
-and LICENSE, with no runtime data or keys. Extract under `/opt`, resulting in
-`/opt/respawn-pond`. Keep application code owned by the administrator and
-non-writable by the service account.
-
-As the lab host administrator, create an unprivileged `respawn-pond` account and
-prepare these directories (adapt service-account creation to the host):
+Build `artifacts/respawn-pond-0.1.0.zip` with `python3 tools/build_site.py` and
+`python3 tools/package.py`. Verify the ZIP from `artifacts/` before transfer:
 
 ```sh
-install -d -m 0700 -o respawn-pond -g respawn-pond /var/lib/respawn-pond
-install -d -m 0700 -o respawn-pond -g respawn-pond /etc/respawn-pond
-runuser -u respawn-pond -- php /opt/respawn-pond/pond/bin/pond.php init /var/lib/respawn-pond/state /etc/respawn-pond/master.key
+(cd artifacts && sha256sum -c respawn-pond-0.1.0.zip.sha256)
 ```
 
-Use a dedicated PHP-FPM pool based on `php-fpm.conf.example` and an nginx TLS
-virtual host based on `nginx.conf.example`. Supply a certificate trusted by the
-PBX operating system, real lab hostname, and correct local FPM socket paths.
-The current source client permits publicly resolved IPv4 HTTPS addresses only;
-private/loopback destinations are intentionally rejected. Do not weaken that
-guard for testing: use an authorised isolated public-address lab endpoint with
-firewall restrictions, or record this as a blocked transport prerequisite.
-Run `nginx -t` and the installed PHP-FPM binary's configuration test before
-starting/reloading services under the host's normal change process. Those actions
-have not been executed in this workspace.
+The installer supports Debian 13 (including 13.7) only. It installs Nginx,
+PHP 8.4 CLI/FPM, PDO SQLite, PHP cURL for the recovery CLI, OpenSSL and CA
+certificates. Kamailio, RTPengine, FreePBX, Asterisk and other Respawn reference
+integrations are not installed or modified. For an isolated lab, allow one CPU,
+1 GiB RAM and local storage for the database, credentials and backups; this is
+not a capacity certification. Use a local filesystem for SQLite.
 
-Serve only the exact `/rpc` route. Never expose the checkout, SQLite directory,
-key, tokens or recovery bundles as static content. Do not trust forwarded HTTPS
-headers. Terminate TLS in the shown virtual host and pass `HTTPS=on` only from
-that TLS listener. Do not enable `RESPAWN_POND_LOOPBACK_TEST` in a deployed pool;
-it exists solely for the automated local loopback test. Set request/body timeouts,
-rate limits and source firewall policy. Do not log request/response bodies or
-Authorization headers. `index.php` returns only generic failures; PHP display
-errors must remain off. No network enrolment or routing/activation API exists.
+Extract the ZIP to `/opt/respawn-pond` and run preflight before installation:
+
+```sh
+unzip -q respawn-pond-0.1.0.zip -d /opt
+sh /opt/respawn-pond/pond/install.sh --preflight
+```
+
+Preflight is read-only. Exit status 1 means an unsupported OS, host conflict or
+other blocking prerequisite; missing PHP/Nginx packages are listed and are
+installed by the explicit install action. Prepare a DNS hostname and an
+administrator-managed certificate/key trusted by the PBX. The installer checks
+the certificate name and private-key file, installs dependencies, creates the
+unprivileged `respawn-pond` account, a dedicated PHP-FPM service/pool and
+private storage, then initializes SQLite and a random 32-byte Pond key if and
+only if neither already exists:
+
+```sh
+sh /opt/respawn-pond/pond/install.sh --install \
+  --hostname pond.example.invalid \
+  --tls-cert /etc/ssl/certs/pond-fullchain.pem \
+  --tls-key /etc/ssl/private/pond-key.pem
+```
+
+Replace the example host and certificate paths. The installer creates the
+unprivileged `respawn-pond` account, a versioned root-owned application release,
+`/opt/respawn-pond/current`, `/var/lib/respawn-pond/state`, a protected
+`/etc/respawn-pond/master.key`, the SQLite store, and an isolated systemd
+PHP-FPM master/pool. It preserves existing database/key state during repeat
+installs/upgrades and rejects incomplete state instead of reinitialising it.
+PHP-FPM listens on a private Unix socket. Nginx configuration is written to
+`sites-available` but stays disabled; Nginx is not started by installation.
+
+Only after reviewing the generated config and explicitly authorising HTTPS
+exposure, enable the site:
+
+```sh
+sh /opt/respawn-pond/pond/install.sh --enable-https
+```
+
+This validates and starts/reloads Nginx as needed. It does not change firewall
+rules; apply host network restrictions through the administrator's normal
+process. Disable only the Pond site, without stopping shared Nginx, with
+`sh /opt/respawn-pond/pond/install.sh --disable-https`.
+
+The installer creates no public health route. `/rpc` requires HTTPS, a scoped
+bearer token and a fresh authenticated envelope. TLS terminates in the configured
+Nginx site, which supplies `HTTPS=on` only to the isolated Pond PHP-FPM service.
+Only `/rpc` is forwarded. Keep the database, key, tokens and recovery bundles
+outside the document root; never log request bodies or Authorization headers.
+Do not set `RESPAWN_POND_LOOPBACK_TEST` on a deployed service.
+
+## Service Status And Logs
+
+The local status command checks SQLite integrity, key-ID consistency, retained
+revision/credential counts and whether recovery material is available. It opens
+the database in query-only mode and requires the private key file:
+
+```sh
+systemctl status respawn-pond-php-fpm.service
+runuser -u respawn-pond -- php /opt/respawn-pond/current/pond/bin/pond.php status /var/lib/respawn-pond/state /etc/respawn-pond/master.key
+journalctl -u respawn-pond-php-fpm.service --since today
+journalctl -u nginx --since today
+```
+
+The installer `--status` action also reports package preflight and Pond state.
+The authenticated Stream `status` RPC reports the source-bound latest retained
+revision/hash and credential availability. No unauthenticated health URL is
+exposed. `fwconsole respawn protection-status` on Server A reports local capture,
+pending publications, acknowledgement and independent retrieval verification.
+Unavailable transport is not successful retention.
+
+Restart or stop only the isolated Pond PHP-FPM service; Nginx may serve other
+sites and must not be stopped globally just for Respawn:
+
+```sh
+systemctl restart respawn-pond-php-fpm.service
+systemctl stop respawn-pond-php-fpm.service
+systemctl start respawn-pond-php-fpm.service
+```
+
+HTTPS exposure remains controlled by the enabled Nginx site and host firewall
+policy. Use `--disable-https` to remove only the Pond site's symlink.
+
+## Updates, Rollback And Removal
+
+Verify and extract a newer version to a staging directory, run its read-only
+preflight, then run that package's installer with the same explicit hostname and
+TLS paths. It creates a new versioned release and switches `current`; state and
+key paths are not replaced:
+
+```sh
+unzip -q respawn-pond-0.1.1.zip -d /tmp/respawn-pond-update
+sh /tmp/respawn-pond-update/respawn-pond/pond/install.sh --preflight
+sh /tmp/respawn-pond-update/respawn-pond/pond/install.sh --install \
+  --hostname pond.example.invalid \
+  --tls-cert /etc/ssl/certs/pond-fullchain.pem \
+  --tls-key /etc/ssl/private/pond-key.pem
+sh /opt/respawn-pond/current/pond/install.sh --status
+```
+
+Use the actual release name and host-managed TLS paths. Existing release
+directories are immutable; installation refuses an unmarked conflicting release.
+Keep old releases until status and recovery checks pass. Roll back application
+code without changing the database or key:
+
+```sh
+sh /opt/respawn-pond/current/pond/install.sh --rollback --release-version 0.1.0
+```
+
+For removal, first disable only the Pond HTTPS site and stop its isolated FPM
+unit. Remove the managed configuration only after verifying its marker and
+backing it up:
+
+```sh
+sh /opt/respawn-pond/current/pond/install.sh --disable-https
+systemctl disable --now respawn-pond-php-fpm.service
+rm /etc/nginx/sites-available/respawn-pond.conf
+rm /etc/respawn-pond/pool.conf /etc/respawn-pond/php-fpm.conf
+rm /etc/systemd/system/respawn-pond-php-fpm.service
+systemctl daemon-reload
+```
+
+This leaves Nginx itself running and retains `/var/lib/respawn-pond` and
+`/etc/respawn-pond/master.key`. Keep those recovery data/key files inaccessible
+until they are backed up and their owner separately authorises disposal. No
+installer action silently deletes retained recovery information.
 
 ## Enrolment And Recovery Authority
 
-An administrator approves enrolment locally on Server B. Generate separate
-random bearer tokens of at least 32 characters using the lab's secret-management
-tool; store them in canonical absolute files, mode 0600, beneath trusted private
-directories. Never pass a token value as a command argument. Do not use sample
-values as deployed credentials. Tokens are stored only as SHA-256 digests in the
-Pond database; possession grants the explicitly enrolled scope. Use TLS and
-rotate/revoke tokens through this local workflow.
+Use separate files and enrolment scopes. Do not overwrite an existing token
+file; generate a fresh filename, enrol it, and revoke the old principal during
+rotation. Keep the recovery token off Server A.
 
 Prepare a private provider JSON matching the source GUI exactly:
 
@@ -81,7 +184,7 @@ Replace hostname, source identity and protected token path with the lab values.
 Compute the non-secret connection identity from that file:
 
 ```sh
-php -r 'require "/opt/respawn-pond/module/bootstrap.php"; echo Respawn\Provider\ConnectionIdentity::forConfiguration(json_decode(file_get_contents($argv[1]),true,16,JSON_THROW_ON_ERROR)), PHP_EOL;' /private/respawn/provider.json
+php -r 'require "/opt/respawn-pond/current/module/bootstrap.php"; echo Respawn\Provider\ConnectionIdentity::forConfiguration(json_decode(file_get_contents($argv[1]),true,16,JSON_THROW_ON_ERROR)), PHP_EOL;' /private/respawn/provider.json
 ```
 
 Create a private enrolment JSON file with that exact connection identity:
@@ -100,8 +203,8 @@ token using a second enrolment file with permissions `["read", "recover"]`.
 Run as the Pond service account, with all input files readable only by it:
 
 ```sh
-php /opt/respawn-pond/pond/bin/pond.php enrol /var/lib/respawn-pond/state /etc/respawn-pond/master.key /private/respawn/source-enrolment.json /private/respawn/source.token
-php /opt/respawn-pond/pond/bin/pond.php enrol /var/lib/respawn-pond/state /etc/respawn-pond/master.key /private/respawn/recovery-enrolment.json /private/respawn/recovery.token
+php /opt/respawn-pond/current/pond/bin/pond.php enrol /var/lib/respawn-pond/state /etc/respawn-pond/master.key /private/respawn/source-enrolment.json /private/respawn/source.token
+php /opt/respawn-pond/current/pond/bin/pond.php enrol /var/lib/respawn-pond/state /etc/respawn-pond/master.key /private/respawn/recovery-enrolment.json /private/respawn/recovery.token
 ```
 
 The source needs `recover` to compare retrieved secrets with their original
@@ -159,7 +262,7 @@ and independently held recovery token path. The target's own Respawn identity
 remains different. Under a trusted private parent, run:
 
 ```sh
-php /opt/respawn-pond/pond/bin/pond.php recover /private/respawn/recovery-provider.json /private/respawn/recovered
+php /opt/respawn-pond/current/pond/bin/pond.php recover /private/respawn/recovery-provider.json /private/respawn/recovered
 ```
 
 The new output directory contains `blueprint.json`, `secrets.json` and mode-0600
@@ -173,7 +276,7 @@ review, using the existing explicitly confirmed FreePBX command documented in
 
 The writer validates a canonical private parent before creating a new destination,
 rejects existing/symlinked destinations and creates/fsyncs private files exclusively.
-Use `php /opt/respawn-pond/tools/preflight.php --role=recovery --bundle=/private/respawn/recovered`
+Use `php /opt/respawn-pond/current/tools/preflight.php --role=recovery --bundle=/private/respawn/recovered`
 for read-only bundle validation. Dispose of the encrypted lab volume and its
 snapshots through the approved process after review; ordinary deletion or `shred`
 is not proof of erasure on SSD/COW storage. Never archive recovered bundles.

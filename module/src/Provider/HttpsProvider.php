@@ -61,6 +61,27 @@ final class HttpsProvider implements Provider, OrderedRetainedBlueprintProvider,
         if (isset($result['enrolmentState']) && in_array($result['enrolmentState'], ['not_enrolled','pending','authorised','revoked','unknown'], true)) {
             $safe['enrolmentState'] = $result['enrolmentState'];
         }
+        if (is_string($result['pondId'] ?? null) && preg_match('/^pond-[a-f0-9]{32}$/D', $result['pondId'])) {
+            $safe['pondId'] = $result['pondId'];
+        }
+        if (in_array($result['storageHealth'] ?? null, ['healthy','degraded'], true)) { $safe['storageHealth'] = $result['storageHealth']; }
+        foreach (['recoveryInformationAvailable','retainedCredentialReferencesVerified'] as $field) {
+            if (is_bool($result[$field] ?? null)) { $safe[$field] = $result[$field]; }
+        }
+        if (is_int($result['retainedCredentialReferenceCount'] ?? null) && $result['retainedCredentialReferenceCount'] >= 0) {
+            $safe['retainedCredentialReferenceCount'] = $result['retainedCredentialReferenceCount'];
+        }
+        if (is_string($result['lastReceivedRevisionId'] ?? null)
+            && preg_match('/^rev-[a-f0-9]{32}$/D', $result['lastReceivedRevisionId'])) {
+            $safe['lastReceivedRevisionId'] = $result['lastReceivedRevisionId'];
+        }
+        if (is_string($result['configurationHash'] ?? null) && preg_match('/^[a-f0-9]{64}$/D', $result['configurationHash'])) {
+            $safe['configurationHash'] = $result['configurationHash'];
+        }
+        if (is_string($result['lastSuccessfulRetentionAt'] ?? null)
+            && strtotime($result['lastSuccessfulRetentionAt']) !== false) {
+            $safe['lastSuccessfulRetentionAt'] = $result['lastSuccessfulRetentionAt'];
+        }
         if (isset($result['pendingChanges']) && is_bool($result['pendingChanges'])) { $safe['pendingChanges'] = $result['pendingChanges']; }
         if (isset($result['quarantinedLegacy']) && is_array($result['quarantinedLegacy'])) {
             $safe['quarantinedLegacy'] = ['requiresExplicitReconciliation' => ($result['quarantinedLegacy']['requiresExplicitReconciliation'] ?? true) === true];

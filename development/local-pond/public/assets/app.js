@@ -38,7 +38,7 @@ function render() {
   const app = snapshot.application;
   const connection = demo.provider.connectionId;
   $('#connection-id').textContent = connection;
-  $('#launch-status').textContent = `Connected to Local Pond / ${demo.provider.enrolmentState}`;
+  $('#launch-status').textContent = `Connected to Development Pond / ${demo.provider.enrolmentState}`;
   $('#capabilities').textContent = `Authenticated capabilities: ${(snapshot.capabilities?.capabilities || []).join(', ') || 'unavailable'}`;
   renderSource(demo.source);
   renderPublication(demo.publication, sourcePreview);
@@ -157,7 +157,7 @@ function renderRouting(operation, model) {
   const active = (model?.activeDestinations || {}).operationId === operation?.operationId;
   const routeState = active ? 'active' : (routing.state || 'not prepared');
   const policy = operation?.request?.activationPolicy || 'none';
-  $('#routing').innerHTML = `<dl class="routing-list"><div><dt>Connectivity</dt><dd>${escapeHtml(connectivity.state || 'not prepared')} / ${escapeHtml(connectivity.mode || 'SIMULATED')}</dd></div><div><dt>Routing policy</dt><dd>${escapeHtml(routeState)} / ${escapeHtml(policy)}</dd></div><div><dt>Destination</dt><dd>${escapeHtml((model?.activeDestinations || {}).destination || routing.destination || 'source route')}</dd></div><div><dt>Readiness expires</dt><dd>${escapeHtml(readiness.expiresAt || 'no evidence')}</dd></div></dl><p class="subtle">Preparation is not activation. The call-flow probe reads persisted Ring Group objects and changes only the Local Pond routing model.</p>`;
+  $('#routing').innerHTML = `<dl class="routing-list"><div><dt>Connectivity</dt><dd>${escapeHtml(connectivity.state || 'not prepared')} / ${escapeHtml(connectivity.mode || 'SIMULATED')}</dd></div><div><dt>Routing policy</dt><dd>${escapeHtml(routeState)} / ${escapeHtml(policy)}</dd></div><div><dt>Destination</dt><dd>${escapeHtml((model?.activeDestinations || {}).destination || routing.destination || 'source route')}</dd></div><div><dt>Readiness expires</dt><dd>${escapeHtml(readiness.expiresAt || 'no evidence')}</dd></div></dl><p class="subtle">Preparation is not activation. The call-flow probe reads persisted Ring Group objects and changes only the Development Pond routing model.</p>`;
 }
 
 function renderEvents(events) {

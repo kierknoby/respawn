@@ -1,7 +1,35 @@
 # Capability Evidence And Priorities
 
+The initial reconstruction profile is intentionally limited; the long-term
+objective is comprehensive FreePBX configuration recovery through progressively
+expanded, version-aware module support. This is an objective, not a claim that all
+modules are currently supported or universally compatible.
+
+## FreePBX Module Coverage
+
+| Coverage stage | Configuration objects and boundaries |
+| --- | --- |
+| Currently supported | Selected Core users without voicemail, fixed one-user/one-device PJSIP endpoints with immutable credential references, and selected simple Ring Groups. Export and reconstruction remain restricted to the validated v2 profile and exact module prerequisites. |
+| Being developed | Broader fields and relationships in the existing Core/PJSIP/Ring Groups profile; native FreePBX integration evidence, updates/removals and ownership safety remain prerequisites before enabling destructive reconciliation. |
+| Planned | Extensions and devices beyond the fixed profile; trunks; inbound/outbound routes; IVRs; queues; time conditions and groups; announcements; Follow Me; conferences; voicemail configuration; feature codes; miscellaneous applications and destinations; custom destinations; recording configuration and associated assets; and other standard FreePBX modules. This list is not exhaustive. |
+| Further investigation | Commercial modules where technically and legally feasible; version-specific interfaces and dependencies; global settings, licences, secrets, generated or non-declarative state, and which recording/media assets require separate retention. Unsupported state must remain visible and blocking where necessary. |
+
+Each module handler must use supported FreePBX interfaces, declare schema and
+version constraints, validate dependencies and secret references, and provide
+read-back evidence. Coverage is measured per discovered module/object/field; a
+supported subset must never be presented as complete PBX recovery.
+
+The provider interfaces are suitable for transport and retention implementations
+to be added without coupling private hosting services to module core. The current
+reconstruction foundation is less extensible: `BuildSpec::ADAPTERS` is a closed
+allowlist and validation/execution branches are type-specific. New module support
+therefore requires controlled additions to the typed adapter and target contracts;
+a general plugin registry is not implemented and is not being introduced as an
+unnecessary rewrite in this milestone.
+
 | Capability | Implemented | Fixture/contract tested | Real integration | Status / limitation |
 | --- | --- | --- | --- | --- |
+| Local Puddle configuration capture | Yes | Synthetic PDO/FreePBX interface doubles cover empty/group/device/credential states, unavailable dependencies, restart, mixed v2 compatibility, change/removal and failed-then-recovered collection | Not yet run on FreePBX 17 | Automatically discovers supported Core users, fixed PJSIP devices and Ring Groups. Distinct hashed capture format; empty collections are valid and capture is non-executable. Incomplete credentials never imply recovery readiness; see `docs/puddle-capture.md` |
 | Firewall IPv4 /32 normalisation/hash | Yes | Yes | Unverified | Explicit trusted hosts only |
 | FreePBX read-only Firewall adapter | Yes | Shape only | Unverified | Missing/disabled fail; broader sources rejected |
 | Executable v2 reconstruction blueprint | Yes | PHP planner and independent JSON Schema | Unverified | Strict selected user/PJSIP/group profile, not whole PBX |
@@ -22,7 +50,7 @@
 | Local revision storage | Atomic journal and immutable hash-addressed chunks | 50 large revisions, 500 retention, 100 operations, pins/plans/migration/interruption | None on FreePBX | 2-500 retention, 100 operations, 64 KiB HTTPS envelope; resource capacity remains a host prerequisite |
 | Scheduler diagnostics | Bounded protected log, heartbeat and health CLI | Failure/recovery, no-refresh reads, rotation and missed/stalled state | None on host cron | External alerting needs independent monitoring |
 | Independent PBX heartbeat/monitoring | Not implemented | None | None | Controller cannot distinguish recent check-in from missed check-in; no automatic takeover is implemented |
-| Local Pond development controller | Yes | Real loopback HTTP, authenticated v2 envelopes, persistent worker/restart, actual Application + BuildExecutor, UI activation/routing model/teardown | No external service | Independent development reference only; all replacement/connectivity/routing evidence is SIMULATED_ONLY |
+| Development Pond controller | Yes | Real loopback HTTP, authenticated v2 envelopes, persistent worker/restart, actual Application + BuildExecutor, UI activation/routing model/teardown | No external service | Independent development reference only; all replacement/connectivity/routing evidence is SIMULATED_ONLY |
 | Cancellation/owned cleanup/retry | Mock | Yes | Unverified | Real resource APIs/fencing unavailable |
 | Two independent PBXs | Synthetic harness | Yes | Unverified | Not two running FreePBX instances |
 | Real hosting/WHMCS/DOMAINTAINS/SBC | Contracts only | Mock boundaries | Unverified | Private service implementations required |
@@ -35,9 +63,10 @@
 1. Prove unsigned module packaging/install/upgrade/uninstall, section authorisation,
    settings persistence, CLI and the supported reconstruction slice in isolated
    FreePBX 17 VMs. Record exact versions and API defaults; adjust only from evidence.
-2. Expand the implemented typed Core-user/PJSIP/Ring-Groups chain to broader field
-   profiles, secure private secret-service integration, global SIP configuration,
-   trunks and inbound/outbound routes. Discover full coverage instead of fixed gaps.
+2. Expand the typed module catalogue incrementally: broaden the current Core-user,
+   PJSIP and Ring Groups profile, then add module handlers for trunks, routes and
+   the roadmap's other standard modules. Discover coverage and dependencies
+   instead of treating the initial profile as the intended limit.
 3. Prove the HTTPS profile against a separately authorised compatible service;
    verify standalone enrolment, durable revision retention and original-password
    recovery across hosts. Keep the explicit operator-managed cron contract and

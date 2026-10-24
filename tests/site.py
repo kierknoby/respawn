@@ -43,7 +43,8 @@ class QuietHandler(http.server.SimpleHTTPRequestHandler):
 
 with tempfile.TemporaryDirectory(prefix='respawn-site-') as temporary:
     target = Path(temporary)
-    with zipfile.ZipFile(ROOT / 'artifacts/respawn-site-0.0.1.zip') as archive:
+    version = ET.parse(ROOT / 'module/module.xml').getroot().findtext('version')
+    with zipfile.ZipFile(ROOT / 'artifacts' / f'respawn-site-{version}.zip') as archive:
         assert all(not name.startswith('/') and '..' not in Path(name).parts for name in archive.namelist())
         archive.extractall(target)
     assert (target / 'index.html').is_file(), 'ZIP must have index.html at upload root'

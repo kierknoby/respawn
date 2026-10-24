@@ -4,6 +4,12 @@ Reconstruction now uses `respawn.reconstruction.v2` and contracts/v2.schema.json
 see reconstruction-v2.md for exact fields and source versions. Transport uses
 the experimental provider-rpc.v2 profile with tightened readiness evidence in
 https-profile.md. Neither schema implies private-service compatibility.
+The versioned Stream envelope is defined in
+[`provider-rpc.v2.schema.json`](../contracts/provider-rpc.v2.schema.json);
+provider-neutral routing control is defined in
+[`routing-control.v1.schema.json`](../contracts/routing-control.v1.schema.json).
+See [the 0.1.0 integration guide](provider-integrations.md) for reference
+adapters and their evidence boundaries.
 
 ## Provider Connection Identity And Retention
 
@@ -55,7 +61,7 @@ a sanitized explanation and next action. Free-form upstream errors are discarded
 The current implementation writes sanitized fields through PHP's configured
 `error_log`; a pinned FreePBX logger accessor was not verified.
 
-The separate Local Pond reference runs only on loopback HTTP for local development
+The separate Development Pond reference runs only on loopback HTTP for local development
 and uses runtime-generated protected synthetic tokens. Its operation/evidence is
 explicitly marked development/simulated and is rejected by the production HTTPS
 adapter. It is not a compatible private-service implementation or production

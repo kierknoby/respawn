@@ -1,0 +1,7 @@
+# Illustrative include fragment only; validate against the installed Kamailio
+# version and existing site configuration before use. This is intentionally
+# fail-closed and does not select, add, remove or activate any destination.
+route[RESPAWN_RECOVERY_GATE] {
+    sl_send_reply("503", "Respawn recovery routing is not configured");
+    exit;
+}

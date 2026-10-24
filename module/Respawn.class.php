@@ -196,11 +196,23 @@ class Respawn extends \FreePBX_Helpers implements \BMO
         public function captureLocalRevision(string $origin = 'manual_capture', ?array $publicationAcknowledgement = null): array
         {
             $settings = $this->settings();
-            if (!preg_match('/^[0-9]{2,8}(,[0-9]{2,8}){0,99}$/D', $settings['groups'] ?? '')) {
-                throw new \RuntimeException('EXPLICIT_SUPPORTED_SCOPE_REQUIRED');
+            if ($publicationAcknowledgement !== null) {
+                throw new \RuntimeException('PUDDLE_CAPTURE_CANNOT_ASSERT_PUBLICATION');
             }
-            $blueprint = $this->exportReconstruction(explode(',', $settings['groups']), $settings['secretManifest'] ?? null);
-            return $this->revisionStore()->capture($blueprint, $origin, $publicationAcknowledgement);
+            $capture = (new \Respawn\Reconstruction\FreePbxConfigurationCollector($this->FreePBX,
+                $settings['identity'], $settings['secretManifest'] ?? ''))->capture();
+            $revision = $this->revisionStore()->captureConfiguration($capture, $origin);
+            $credentialsIncomplete = in_array($revision['credentialStatus'], ['incomplete','not_configured'], true);
+            $captureState = !$revision['managedScope']['complete'] ? 'configuration_capture_incomplete'
+                : ($credentialsIncomplete ? ($revision['captureResult'] === 'unchanged'
+                    ? 'configuration_unchanged_credentials_incomplete' : 'configuration_captured_credentials_incomplete')
+                    : ($revision['captureResult'] === 'unchanged' ? 'configuration_unchanged' : 'configuration_captured'));
+            return ['state'=>$captureState,
+                'revisionId'=>$revision['revisionId'],'parentRevisionId'=>$revision['parentRevisionId'],
+                'contentHash'=>$revision['contentHash'],'unchanged'=>$revision['captureResult'] === 'unchanged',
+                'configurationComplete'=>$revision['managedScope']['complete'],
+                'credentialStatus'=>$revision['credentialStatus'],'recoveryReady'=>false,
+                'blockingGaps'=>$revision['coverage']['blockingGaps'] ?? []];
         }
 
         public function recordPublicationRevision(array $acknowledgement): array
@@ -213,6 +225,7 @@ class Respawn extends \FreePBX_Helpers implements \BMO
                 throw new \RuntimeException('REVISION_PUBLICATION_ACK_INVALID');
             }
             foreach ($store->list($source) as $revision) {
+                if (($revision['captureKind'] ?? '') === 'configuration_capture') { continue; }
                 if (($revision['contentHash'] ?? '') !== $blueprint['contentHash']) { continue; }
                 $store->markPublished($source, $revision['revisionId'], $acknowledgement, $publication['connectionId']);
                 return $store->get($source, $revision['revisionId']);
@@ -231,7 +244,7 @@ class Respawn extends \FreePBX_Helpers implements \BMO
         public function inspectLocalRevision(string $revisionId): array
         {
             $revision = $this->revisionStore()->get($this->settings()['identity'], $revisionId);
-            unset($revision['blueprint'], $revision['pins'], $revision['recordHash']);
+            unset($revision['blueprint'], $revision['configurationCapture'], $revision['pins'], $revision['recordHash']);
             return $revision;
         }
 
@@ -347,6 +360,9 @@ class Respawn extends \FreePBX_Helpers implements \BMO
             $this->assertNoConflictingProviderOperation($settings['identity']);
             $revisions = $this->revisionStore();
             $revision = $revisions->get($settings['identity'], $revisionId);
+            if (($revision['captureKind'] ?? '') === 'configuration_capture') {
+                throw new \RuntimeException('PUDDLE_CAPTURE_NOT_EXECUTABLE');
+            }
             $target = $this->buildTarget();
             $catalog = $revisions->operationCatalogForRevision($settings['identity'], $revisionId);
             $snapshot = $target->reconciliationSnapshot(

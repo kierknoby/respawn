@@ -3,10 +3,12 @@ import html
 import json
 from pathlib import Path
 import shutil
+import xml.etree.ElementTree as ET
 from xml.sax.saxutils import escape
 from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parents[1]
+VERSION = ET.parse(ROOT / 'module/module.xml').getroot().findtext('version')
 OUT = ROOT / 'build/site'
 PAGES = json.loads((ROOT / 'website/pages.json').read_text())
 OUT.mkdir(parents=True, exist_ok=True)
@@ -84,7 +86,7 @@ for index, (slug, page) in enumerate(PAGES.items()):
 <link rel="canonical" href="{url}"><meta property="og:title" content="{title} | Respawn"><meta property="og:description" content="{description}"><meta property="og:type" content="website"><meta property="og:url" content="{url}"><meta property="og:image" content="https://respawn.in1.click/assets/reconstruction.png">
 <link rel="icon" href="assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="assets/style.css"><script src="assets/app.js" defer></script></head>
 <body><a class="skip" href="#main">Skip to content</a>
-<div class="preview"><div class="container"><span>0.0.1 / DEVELOPMENT SCAFFOLD</span><a href="status.html">No production takeover verified</a></div></div>
+<div class="preview"><div class="container"><span>{VERSION} / DEVELOPMENT SCAFFOLD</span><a href="status.html">No production takeover verified</a></div></div>
 <header><div class="container navigation"><a class="brand" href="index.html" aria-label="Respawn home"><span aria-hidden="true" class="mark">R</span> RESPAWN</a><button class="menu" type="button" aria-expanded="false" aria-controls="navigation" aria-label="Open navigation" hidden>&#9776;</button><nav id="navigation" aria-label="Main navigation">{nav}</nav></div></header>
 <main id="main"><section class="hero"><div class="container"><p class="eyebrow">{html.escape(page['eyebrow'])}</p><h1>{title}</h1><p class="standfirst">{html.escape(page['intro'])}</p><p class="lede">{html.escape(page['description'])}</p><div class="hero-links"><a class="button primary" href="one-click.html">One-Click Respawn <span aria-hidden="true">&#8599;</span></a><a class="text-link" href="https://github.com/kierknoby/respawn">Explore the GPLv3+ source <span aria-hidden="true">&#8599;</span></a></div></div>{graph_html}</section>
 {sections}{code}<section class="band blue"><div class="container closing"><div><span class="number">BUILD / VERIFY / RECONCILE</span><h2>Keep the evidence with the operation.</h2><p>Configuration ready, routing prepared and live takeover are different claims.</p></div><a class="button plain" href="lifecycle.html">Read the lifecycle &#8594;</a></div></section></main>
@@ -98,7 +100,7 @@ not_found = f'''<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><m
 <title>Page Not Found | Respawn</title><meta name="description" content="The requested Respawn project page could not be found. Return to the project overview or browse the documentation.">
 <meta name="robots" content="noindex,follow"><meta name="theme-color" content="#000000"><meta property="og:type" content="website"><meta property="og:title" content="Page Not Found | Respawn"><meta property="og:description" content="Return to the Respawn FreePBX reconstruction project."><meta property="og:image" content="https://respawn.in1.click/assets/reconstruction.png">
 <link rel="icon" href="assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="assets/style.css"><script src="assets/app.js" defer></script></head><body><a class="skip" href="#main">Skip to content</a>
-<div class="preview"><div class="container"><span>0.0.1 / DEVELOPMENT SCAFFOLD</span><a href="status.html">Development status</a></div></div>
+<div class="preview"><div class="container"><span>{VERSION} / DEVELOPMENT SCAFFOLD</span><a href="status.html">Development status</a></div></div>
 <header><div class="container navigation"><a class="brand" href="index.html" aria-label="Respawn home"><span aria-hidden="true" class="mark">R</span> RESPAWN</a><button class="menu" type="button" aria-expanded="false" aria-controls="navigation" aria-label="Open navigation" hidden>&#9776;</button><nav id="navigation" aria-label="Main navigation">{nav}</nav></div></header>
 <main id="main"><section class="hero"><div class="container"><p class="eyebrow">RESPAWN / PAGE NOT FOUND</p><h1>404 / Page not found</h1><p class="standfirst">That route is not in this blueprint.</p><p class="lede">The address may be out of date. Return to the project overview, reconstruction guide or current development status.</p><div class="hero-links"><a class="button primary" href="index.html">Project home <span aria-hidden="true">&#8594;</span></a><a class="text-link" href="how-it-works.html">How reconstruction works</a><a class="text-link" href="status.html">Development status</a></div></div></section></main>
 <footer><div class="container"><div class="footer-grid"><div><a class="brand" href="index.html">RESPAWN</a><p>Open-source FreePBX Connectivity module.<br>Blueprint-led reconstruction. Provider-controlled takeover.</p></div><nav aria-label="Footer">{footer_links}</nav><div><h2>Project boundaries</h2><p>Experimental project. No real FreePBX reconstruction or live takeover is verified.</p></div></div><div class="footer-bottom"><span>GPLv3+ / 2026 Respawn contributors</span><a href="#main">Back to top &#8593;</a></div></div></footer></body></html>'''

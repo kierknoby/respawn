@@ -84,6 +84,24 @@ function protectionRotateCredentialReference(array $blueprint): array
     return BuildSpec::create($blueprint['sourcePbxId'], $blueprint['modules'], $users, $devices, $groups);
 }
 
+function protectionRemoveExtension(array $blueprint, string $number): array
+{
+    $users = []; $devices = []; $groups = [];
+    foreach (BuildSpec::plan($blueprint) as $operation) {
+        $identity = $operation['object']['identity'];
+        $type = $operation['object']['type'];
+        if ($identity === $number && in_array($type, ['user','pjsip'], true)) { continue; }
+        if ($type === 'user') { $users[$identity] = $operation['parameters']; }
+        elseif ($type === 'pjsip') { $devices[$identity] = $operation['parameters'] + ['secretRef' => $operation['secretRefs']['authPassword']]; }
+        else {
+            $group = ['number' => $identity] + $operation['parameters'];
+            $group['members'] = array_values(array_filter($group['members'], static fn (string $member): bool => $member !== $number));
+            $groups[] = $group;
+        }
+    }
+    return BuildSpec::create($blueprint['sourcePbxId'], $blueprint['modules'], $users, $devices, $groups);
+}
+
 function protectionRemoveTree(string $path): void
 {
     if (is_link($path)) { unlink($path); return; }
@@ -269,6 +287,13 @@ try {
         && $rotated['latestObservedHash'] !== $changedPjsip['latestObservedHash']
         && $rotated['credentialsIndependentlyRecoverable'] === false,
         'credential-reference rotation creates a new hash but does not claim escrow readiness');
+    $priorRevision = $rotated['latestLocalRevisionId'];
+    $blueprint = protectionRemoveExtension($blueprint, '1003');
+    $removed = $newConnectionCoordinator->reconcile($exporter, true, $verificationDue + 2400);
+    protectionAssert($removed['latestLocalRevisionId'] !== $priorRevision
+        && $removed['latestObservedHash'] !== $rotated['latestObservedHash']
+        && count(BuildSpec::plan($revisions->get('pbx-alpha', $removed['latestLocalRevisionId'])['blueprint'])) === 6,
+        'removing a supported device and its user relationship produces a new retained configuration revision');
 
     protectionRemoveTree($root . '/source');
     protectionRemoveTree($root . '/source-revisions');

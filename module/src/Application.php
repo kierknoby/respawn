@@ -485,7 +485,9 @@ final class Application
         $local['providerStatus'] = $currentStatus === null ? 'unavailable_or_unverified' : 'fresh_authenticated_response';
         $local['label'] = $label;
         if ($currentStatus !== null) {
-            foreach (['publication','capabilities','authorised','quarantinedLegacy','quarantinedOperations'] as $field) {
+            foreach (['publication','capabilities','authorised','quarantinedLegacy','quarantinedOperations','pondId',
+                'storageHealth','lastReceivedRevisionId','lastSuccessfulRetentionAt','configurationHash',
+                'recoveryInformationAvailable','retainedCredentialReferencesVerified','retainedCredentialReferenceCount'] as $field) {
                 if (array_key_exists($field, $currentStatus)) { $local[$field] = $currentStatus[$field]; }
             }
         }

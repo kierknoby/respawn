@@ -187,6 +187,20 @@ try {
     $retained = $recovery->retrieveLatestRevision('pbx-alpha');
     Blueprint::verifyHash($retained['blueprint']);
     pondAssert($retained['revisionId'] === $latest['latestVerifiedRevisionId'], 'restarted independent Pond retrieves latest acknowledged revision after source loss');
+    $pondStatus = $recovery->status();
+    pondAssert(($pondStatus['lastReceivedRevisionId'] ?? '') === $retained['revisionId']
+        && ($pondStatus['configurationHash'] ?? '') === $retained['blueprint']['contentHash']
+        && ($pondStatus['storageHealth'] ?? '') === 'healthy'
+        && ($pondStatus['recoveryInformationAvailable'] ?? false) === true
+        && ($pondStatus['retainedCredentialReferenceCount'] ?? 0) > 0,
+        'authenticated Pond status reports its retained revision, healthy SQLite storage, and verified recovery credentials');
+    $databaseDigest = hash_file('sha256', $root . '/pond/pond.sqlite');
+    $localHealth = \Respawn\Pond\Pond::health($root . '/pond', $root . '/key');
+    pondAssert(($localHealth['state'] ?? '') === 'healthy' && ($localHealth['readOnly'] ?? false) === true
+        && ($localHealth['retainedRevisionCount'] ?? 0) > 0 && ($localHealth['encryptedCredentialCount'] ?? 0) > 0
+        && ($localHealth['recoveryMaterialAvailable'] ?? false) === true
+        && hash_file('sha256', $root . '/pond/pond.sqlite') === $databaseDigest,
+        'local Pond health command verifies recovery material and reports integrity without modifying SQLite');
     pondAssert($recovery->retrieveRevision('pbx-alpha', $initial['latestVerifiedRevisionId'])['revisionId'] === $initial['latestVerifiedRevisionId'],
         'older revision and original credential references survive rotation');
     pondDenied(static fn () => $recovery->escrowCredential('pbx-alpha', $reference, 'Different-Password-123456', hash('sha256','no-write')),
@@ -211,6 +225,10 @@ try {
         'existing reconstruction engine verifies simulated target with exact original/rotated passwords obtained only from independent Pond');
     $savedKey = file_get_contents($root . '/key');
     file_put_contents($root . '/key', random_bytes(32));
+    $wrongKeyHealth = \Respawn\Pond\Pond::health($root . '/pond', $root . '/key');
+    pondAssert(($wrongKeyHealth['state'] ?? '') === 'degraded'
+        && ($wrongKeyHealth['recoveryMaterialAvailable'] ?? true) === false,
+        'Pond health refuses recovery readiness when the configured master key does not match escrow records');
     pondDenied(static fn () => $recovery->retrieveCredential('pbx-alpha', $reference), 'wrong Pond decryption key cannot return a credential');
     file_put_contents($root . '/key', $savedKey);
     $database = new PDO('sqlite:' . $root . '/pond/pond.sqlite');

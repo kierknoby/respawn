@@ -34,6 +34,21 @@ final class Diagnostic
         'PROVIDER_CONNECTION_IDENTITY_MISMATCH' => ['The configured provider connection identity is inconsistent.', 'Restore the original endpoint/trust configuration or explicitly resolve its retained operations first.'],
         'PROVIDER_OPERATION_READINESS_INVALID' => ['The operation is visible but its readiness evidence is malformed or bound to a different request.', 'Do not activate. Reconcile with the original provider and obtain fresh evidence for this exact blueprint.'],
         'PROVIDER_OPERATION_SIMULATED_EVIDENCE_REJECTED' => ['Development or simulated evidence cannot authorize a production operation.', 'Use evidence from the authenticated production provider and its independently verified readiness checks.'],
+        'PUDDLE_CONFIGURATION_DATABASE_UNAVAILABLE' => ['The Puddle could not access the FreePBX configuration database.', 'Check the FreePBX database interface and service-account permissions; the source PBX configuration was not changed.'],
+        'PUDDLE_PJSIP_DISCOVERY_FAILED' => ['The Puddle could not enumerate PJSIP devices from the supported configuration interface.', 'Check that Core and SIP Settings are enabled and their configuration database tables are readable.'],
+        'PUDDLE_RINGGROUP_DISCOVERY_FAILED' => ['The Puddle could not enumerate Ring Groups.', 'Check that the Ringgroups module is enabled and its read-only configuration interface is available. An empty Ring Group table is valid.'],
+        'PUDDLE_COLLECTION_PROVIDER_FAILED' => ['A supported configuration collection did not complete.', 'Review module availability and the protected diagnostic code. Any previous revision remains intact.'],
+        'PUDDLE_CAPTURE_NOT_EXECUTABLE' => ['This local configuration capture is not an executable recovery blueprint.', 'Create and validate a supported reconstruction blueprint before planning target changes.'],
+        'PUDDLE_SOURCE_ID_INVALID' => ['The local PBX identity is invalid.', 'Review Respawn identity settings; existing retained revisions were not changed.'],
+        'PUDDLE_CAPTURE_METADATA_INVALID' => ['The Puddle capture metadata is inconsistent.', 'Review the protected diagnostic code and repeat capture; the previous valid revision remains intact.'],
+        'PUDDLE_CAPTURE_HASH_MISMATCH' => ['The Puddle capture integrity check failed.', 'Do not use this capture for recovery. Retry capture and preserve the previous revision for investigation.'],
+        'PUDDLE_SECRET_MATERIAL_PROHIBITED' => ['A collector attempted to include credential material in configuration state.', 'The capture was rejected. Keep credentials in the protected secret workflow; do not weaken this check.'],
+        'MODULE_UNAVAILABLE' => ['A module required for this supported collection is not enabled or available.', 'Enable/install the required FreePBX module using the approved procedure, then capture again. An empty collection from an available module is valid.'],
+        'UNSUPPORTED_FREEPBX_VERSION' => ['The installed FreePBX version is outside the currently validated capture profile.', 'Review the supported-version requirements. The configuration snapshot is retained as incomplete and is not recovery-ready.'],
+        'PJSIP_CONFIGURATION_COLLECTION_INCOMPLETE' => ['PJSIP configuration could not be completely inspected, so credential completeness is unknown.', 'Check Core and SIP Settings availability and inspect the collection status before considering recovery.'],
+        'CREDENTIAL_PROTECTION_UNAVAILABLE' => ['Configuration was captured, but credential protection could not be verified.', 'Review the protected manifest and credential diagnostics. This revision is not independently recoverable.'],
+        'SOURCE_CREDENTIAL_UNAVAILABLE' => ['A discovered PJSIP device has no locally verifiable source credential.', 'Inspect the device and protected manifest. The captured configuration is not independently recoverable.'],
+        'SECRET_REFERENCE_MISMATCH' => ['The protected manifest credential does not match the source device credential.', 'Correct the immutable secret reference through the approved secret workflow; do not replace the PBX credential during capture.'],
         'OPERATION_NOT_FOUND_ON_CONNECTION' => ['The operation is not present on this provider connection.', 'Check the original connection record; do not retry management against the currently selected provider.'],
         'SUBMISSION_NOT_OWNED_OR_QUARANTINED' => ['The submission is not authorised for this PBX or its provider connection is unknown.', 'Use the owning PBX session or explicitly reconcile the quarantined legacy record.'],
         'SUBMISSION_ID_INVALID' => ['The local submission identifier is invalid.', 'Select a listed pending submission; do not post a request body or launch key.'],
@@ -79,6 +94,10 @@ final class Diagnostic
             || str_starts_with($message, 'STATE_CHUNK_') || str_starts_with($message, 'STATE_STORAGE_')) {
             return 'RESPAWN_STORAGE_UNAVAILABLE';
         }
+        if (preg_match('/^(?:PUDDLE_[A-Z0-9_]{3,64}|SOURCE_CREDENTIAL_UNAVAILABLE|SECRET_REFERENCE_MISMATCH)$/D', $message)) {
+            return $message;
+        }
+        if ($message === 'MODULE_UNAVAILABLE' || $message === 'UNSUPPORTED_FREEPBX_VERSION') { return $message; }
         if (str_contains($message, 'SECRET_MANIFEST_MISSING')) { return 'SECRET_MANIFEST_MISSING'; }
         if (str_contains($message, 'SECRET_MANIFEST_UNSAFE')) { return 'SECRET_MANIFEST_UNSAFE'; }
         if (str_contains($message, 'SECRET_REFERENCE_FILE_UNSAFE')) { return 'SECRET_REFERENCE_FILE_UNSAFE'; }

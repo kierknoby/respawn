@@ -42,6 +42,84 @@ final class Pond
         } catch (\Throwable $exception) { $this->database->exec('ROLLBACK'); throw $exception; }
     }
 
+    public static function health(string $directory, string $keyFile): array
+    {
+        self::privatePath($directory, true);
+        self::privatePath($keyFile, false);
+        $key = file_get_contents($keyFile);
+        if (!is_string($key) || strlen($key) !== 32) { throw new RuntimeException('POND_KEY_INVALID'); }
+        $databaseFile = $directory . '/pond.sqlite';
+        self::privatePath($databaseFile, false);
+        $database = new PDO('sqlite:' . $databaseFile, null, null, [PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]);
+        $database->exec('PRAGMA query_only=ON; PRAGMA busy_timeout=5000;');
+        $integrity = $database->query('PRAGMA quick_check')->fetchColumn();
+        $identity = $database->query('SELECT id FROM identity LIMIT 1')->fetchColumn();
+        $principalCount = (int) $database->query('SELECT COUNT(*) FROM principals')->fetchColumn();
+        $revisionCount = 0;
+        $credentialCount = 0;
+        $keyConsistent = true;
+        $lastRetentionAt = null;
+        foreach ($database->query('SELECT kind, body FROM objects') as $row) {
+            $body = json_decode($row['body'], true, 64, JSON_THROW_ON_ERROR);
+            if ($row['kind'] === 'revision') {
+                $revisionCount++;
+                $at = $body['ack']['at'] ?? null;
+                if (is_string($at) && ($lastRetentionAt === null || strcmp($at, $lastRetentionAt) > 0)) { $lastRetentionAt = $at; }
+            } elseif ($row['kind'] === 'credential') {
+                $credentialCount++;
+                if (!is_string($body['keyId'] ?? null) || !hash_equals(substr(hash('sha256',$key),0,32), $body['keyId'])) {
+                    $keyConsistent = false;
+                }
+            }
+        }
+        $headCount = 0;
+        $recoverableHeadCount = 0;
+        $revisionLookup = $database->prepare('SELECT body FROM objects WHERE scope=? AND kind=? AND id=?');
+        foreach ($database->query("SELECT scope, body FROM objects WHERE kind='head' AND id='latest'") as $headRow) {
+            $headCount++;
+            $head = json_decode($headRow['body'], true, 32, JSON_THROW_ON_ERROR);
+            $revisionLookup->execute([$headRow['scope'],'revision',$head['revisionId'] ?? '']);
+            $revisionBody = $revisionLookup->fetchColumn();
+            $revisionLookup->closeCursor();
+            if (!is_string($revisionBody)) { continue; }
+            $revision = json_decode($revisionBody, true, 64, JSON_THROW_ON_ERROR);
+            $blueprint = $revision['blueprint'] ?? null;
+            if (!is_array($blueprint)) { continue; }
+            Blueprint::verifyHash($blueprint);
+            $recoverable = true;
+            foreach (BuildSpec::plan($blueprint) as $operation) {
+                foreach ($operation['secretRefs'] ?? [] as $reference) {
+                    $revisionLookup->execute([$headRow['scope'],'credential',$reference]);
+                    $credentialBody = $revisionLookup->fetchColumn();
+                    $revisionLookup->closeCursor();
+                    $credential = is_string($credentialBody)
+                        ? json_decode($credentialBody, true, 16, JSON_THROW_ON_ERROR) : null;
+                    $nonce = is_array($credential) ? base64_decode($credential['nonce'] ?? '', true) : false;
+                    $tag = is_array($credential) ? base64_decode($credential['tag'] ?? '', true) : false;
+                    $ciphertext = is_array($credential) ? base64_decode($credential['ciphertext'] ?? '', true) : false;
+                    if (!is_array($credential) || ($credential['keyId'] ?? '') !== substr(hash('sha256',$key),0,32)
+                        || !is_string($nonce) || !is_string($tag) || !is_string($ciphertext)
+                        || openssl_decrypt($ciphertext,'aes-256-gcm',$key,OPENSSL_RAW_DATA,$nonce,$tag,
+                            $headRow['scope'] . "\0" . $reference) === false) {
+                        $recoverable = false;
+                    }
+                }
+            }
+            if ($recoverable) { $recoverableHeadCount++; }
+        }
+        $database = null;
+        return ['state'=>$integrity === 'ok' && $keyConsistent ? 'healthy' : 'degraded',
+            'pondId'=>is_string($identity) ? $identity : null,
+            'storageHealth'=>$integrity === 'ok' ? 'healthy' : 'degraded',
+            'credentialKeyHealth'=>$keyConsistent ? 'consistent' : 'mismatch',
+            'principalCount'=>$principalCount,'retainedRevisionCount'=>$revisionCount,
+            'encryptedCredentialCount'=>$credentialCount,'lastSuccessfulRetentionAt'=>$lastRetentionAt,
+            'recoveryHeadCount'=>$headCount,'recoverableHeadCount'=>$recoverableHeadCount,
+            'recoveryMaterialAvailable'=>$integrity === 'ok' && $keyConsistent
+                && $headCount > 0 && $recoverableHeadCount === $headCount,
+            'readOnly'=>true];
+    }
+
     public static function privatePath(string $path, bool $directory): void
     {
         if (!str_starts_with($path, '/') || realpath($path) !== $path || is_link($path)
@@ -116,7 +194,31 @@ final class Pond
         if (isset($params['pbxId']) && $params['pbxId'] !== $pbx
             || isset($params['sourcePbxId']) && $params['sourcePbxId'] !== $pbx) { throw new RuntimeException('POND_SCOPE_DENIED'); }
         if ($method === 'capabilities') { return ['identity'=>$pbx, 'authorised'=>true, 'providerId'=>$this->database->query('SELECT id FROM identity')->fetchColumn(), 'capabilities'=>['retention']]; }
-        if ($method === 'status') { return ['operations'=>[], 'authorised'=>true, 'enrolmentState'=>'authorised']; }
+        if ($method === 'status') {
+            $head = $this->get($scope, 'head', 'latest');
+            $retained = is_array($head) ? $this->get($scope, 'revision', $head['revisionId'] ?? '') : null;
+            $credentialsVerified = $retained !== null;
+            $credentialCount = 0;
+            foreach ($retained['blueprint']['operations'] ?? [] as $operation) {
+                foreach ($operation['secretRefs'] ?? [] as $reference) {
+                    $credentialCount++;
+                    $credential = $this->get($scope, 'credential', $reference);
+                    if ($credential === null) { $credentialsVerified = false; continue; }
+                    try { $this->decrypt($credential, $scope . "\0" . $reference); }
+                    catch (\Throwable) { $credentialsVerified = false; }
+                }
+            }
+            $pondId = $this->database->query('SELECT id FROM identity')->fetchColumn();
+            $storageHealth = $this->database->query('PRAGMA quick_check')->fetchColumn();
+            return ['operations'=>[], 'authorised'=>true, 'enrolmentState'=>'authorised',
+                'pondId'=>$pondId, 'storageHealth'=>$storageHealth === 'ok' ? 'healthy' : 'degraded',
+                'lastReceivedRevisionId'=>$retained['ack']['revisionId'] ?? null,
+                'lastSuccessfulRetentionAt'=>$retained['ack']['at'] ?? null,
+                'configurationHash'=>$retained['blueprint']['contentHash'] ?? null,
+                'recoveryInformationAvailable'=>$credentialsVerified,
+                'retainedCredentialReferencesVerified'=>$credentialsVerified,
+                'retainedCredentialReferenceCount'=>$credentialCount];
+        }
         if (in_array($method, ['escrowCredential','retrieveCredential'], true)) {
             $reference = $params['secretReference'] ?? '';
             if (!is_string($reference) || !preg_match('/^secret:' . preg_quote($pbx, '/') . ':[0-9]{2,8}:[a-zA-Z0-9._-]{1,64}$/D', $reference)) { throw new RuntimeException('POND_REFERENCE_INVALID'); }
