@@ -54,9 +54,6 @@ final class PuddleCollector
                 'reasonCode'=>preg_match('/^[A-Z0-9_]{3,64}$/D', $exception->getMessage())
                     ? $exception->getMessage() : 'CREDENTIAL_PROTECTION_UNAVAILABLE'];
         }
-        if (($credentials['state'] ?? '') !== 'verified_locally' && ($credentials['state'] ?? '') !== 'not_required') {
-            $gaps[] = 'CREDENTIALS:' . ($credentials['reasonCode'] ?? $credentials['state'] ?? 'INCOMPLETE');
-        }
         $gaps = array_values(array_unique($gaps));
         sort($gaps, SORT_STRING);
         return ConfigurationCapture::create($this->sourcePbxId, $modules, $collections, $credentials, $gaps);

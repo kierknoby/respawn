@@ -35,9 +35,10 @@ completes, the credential state is `not_configured`, and recovery readiness is
 false. A protected manifest can be checked against each discovered source
 credential; `verified_locally` still does not mean independently escrowed or
 recoverable. Mismatch, unreadable protection or missing source secrets produce
-incomplete credential status and a coverage gap. Existing AES-GCM escrow and
+incomplete credential status and a credential reason code. Existing AES-GCM escrow and
 remote recovery verification remain unchanged and are not attempted during
-manual capture.
+manual capture. Credential status and its reason code do not add configuration
+blocking gaps; missing or mismatched credentials never imply recovery readiness.
 
 An unsupported field or unavailable required module makes the configuration
 capture incomplete. An installed module whose supported collection has zero
@@ -167,6 +168,117 @@ OPcache. This procedure does not install the new Debian 13 service unit on KAM1.
 To roll back, restore the two backed-up files and restart the same PHP-FPM unit.
 Never run `init`, replace `pond.sqlite`, regenerate the key or change the
 deployed HTTPS service during this code-only update.
+
+## GUI Compatibility Diagnostic
+
+The reported 7201/7202/7290 failure is traced to capture calling reconstruction
+validators (`NativeProfile::userParameters`, the fixed PJSIP profile and
+`FreePbxRinggroups::read`). Their exact live mismatches are not yet known. Those
+validators remain unchanged. Do not treat the credential-gap correction alone as
+the object-compatibility fix or upgrade for that purpose yet.
+
+Run this single read-only command on the existing development PBX as the normal
+FreePBX administrative CLI account, using the currently installed 0.1.0 module.
+It does not capture a revision, read a manifest, publish, reload or write PBX
+configuration. It reads the existing snapshot interfaces and Ringgroups `get`.
+Output contains field names, match status and only explicitly allowed enum/numeric
+values. Passwords, hashes, free-form strings, destinations and unknown field
+values are never printed. Do not substitute a SQL dump or raw snapshot dump.
+
+```sh
+php <<'PHP'
+<?php
+ini_set('display_errors', '0');
+error_reporting(0);
+try {
+	require '/etc/freepbx.conf';
+	require_once '/var/www/html/admin/modules/respawn/bootstrap.php';
+	$freePbx = \FreePBX::Create();
+	$snapshot = new \Respawn\Reconstruction\FreePbxSnapshot($freePbx->Database, $freePbx->astman);
+	$report = static function (array $actual, array $expected): array {
+		$result = [];
+		$enumFields = ['voicemail','callwaiting','devicetype','tech','sipdriver','dtmfmode',
+			'direct_media','rtp_symmetric','force_rport','rewrite_contact','remove_existing',
+			'media_encryption','strategy','ringing','recording','progress','changecid',
+			'needsconf','cwignore','cfignore','cpickup','trustrpid','sendrpid','avpf','timers',
+			'icesupport','send_connected_line','user_eq_phone','webrtc','rtcp_mux','bundle'];
+		$enums = ['','novm','ENABLED','DISABLED','fixed','adhoc','pjsip','chan_pjsip',
+			'yes','no','auto','enabled','disabled','dontcare','always','never','default',
+			'rfc4733','rfc2833','inband','info','auto_info','ringall','Ring','pai','rpid',
+			'sdes','dtls'];
+		$numericFields = ['ringtimer','cfringtimer','concurrency_limit','qualifyfreq',
+			'max_contacts','grptime','annmsg_id','remotealert_id','toolate_id',
+			'minimum_expiration','maximum_expiration','device_state_busy_at','rtp_timeout',
+			'rtp_timeout_hold','timers_min_se','max_audio_streams','max_video_streams'];
+		$keys = array_unique(array_merge(array_keys($actual), array_keys($expected)));
+		sort($keys, SORT_STRING);
+		foreach ($keys as $key) {
+			if (!is_string($key) || !preg_match('/^[a-zA-Z0-9_\/.-]{1,80}$/D', $key)) {
+				$result['unrepresentableFieldName'] = true;
+				continue;
+			}
+			if (preg_match('/secret|password|credential|token|md5|auth/i', $key)) { continue; }
+			$present = array_key_exists($key, $actual);
+			$known = array_key_exists($key, $expected);
+			$value = $present && is_scalar($actual[$key]) ? (string) $actual[$key] : null;
+			$entry = ['present'=>$present, 'profileField'=>$known];
+			if ($known && $expected[$key] !== null) {
+				$entry['matchesReconstructionDefault'] = $present && $value === (string) $expected[$key];
+			}
+			if ((in_array($key, $enumFields, true) && in_array($value, $enums, true))
+				|| (in_array($key, $numericFields, true) && is_string($value)
+					&& preg_match('/^[0-9]{1,8}$/D', $value))) {
+				$entry['value'] = $value;
+			}
+			$result[$key] = $entry;
+		}
+		return $result;
+	};
+	$output = [];
+	foreach (['7201','7202'] as $number) {
+		$user = $snapshot->read('user', $number);
+		$userDefaults = ['extension'=>null,'name'=>null,'voicemail'=>'novm','password'=>'',
+			'ringtimer'=>'0','noanswer'=>'','recording'=>'','outboundcid'=>'','sipname'=>'',
+			'noanswer_cid'=>'','busy_cid'=>'','chanunavail_cid'=>'','noanswer_dest'=>'',
+			'busy_dest'=>'','chanunavail_dest'=>''];
+		$output['users'][$number] = ['row'=>$report($user['row'] ?? [], $userDefaults),
+			'ast'=>$report($user['ast'], \Respawn\Reconstruction\NativeProfile::userAst(
+				$number, (string) ($user['row']['name'] ?? ''))),
+			'callwaiting'=>$report(['callwaiting'=>$user['callwaiting']], ['callwaiting'=>'ENABLED'])];
+		$device = $snapshot->read('pjsip', $number);
+		$deviceDefaults = ['id'=>$number,'tech'=>'pjsip','dial'=>'PJSIP/' . $number,
+			'devicetype'=>'fixed','user'=>$number,'description'=>null,'emergency_cid'=>'','hint_override'=>''];
+		$settingsDefaults = \Respawn\Reconstruction\NativeProfile::deviceFixed(
+			$number, (string) ($device['row']['description'] ?? ''));
+		foreach (['context','transport','dtmfmode','allow','disallow','direct_media','rtp_symmetric',
+			'force_rport','rewrite_contact','max_contacts','remove_existing','media_encryption','username'] as $key) {
+			$settingsDefaults[$key] = null;
+		}
+		$output['pjsip'][$number] = ['row'=>$report($device['row'] ?? [], $deviceDefaults),
+			'settings'=>$report($device['settings'], $settingsDefaults),
+			'ast'=>$report($device['ast'], ['user'=>$number,'tech'=>'pjsip','dial'=>'PJSIP/' . $number,
+				'type'=>'fixed','default_user'=>$number])];
+	}
+	$groupDefaults = ['grpnum'=>'7290','description'=>null,'strategy'=>'ringall','grptime'=>'20',
+		'grplist'=>null,'postdest'=>'app-blackhole,hangup,1','grppre'=>'','annmsg_id'=>'0',
+		'alertinfo'=>'','needsconf'=>'','remotealert_id'=>'0','toolate_id'=>'0','ringing'=>'Ring',
+		'cwignore'=>'','cfignore'=>'','cpickup'=>'','recording'=>'dontcare','progress'=>'yes',
+		'elsewhere'=>'','rvolume'=>'','changecid'=>'default','fixedcid'=>''];
+	$output['ringgroups']['7290'] = $report($freePbx->Ringgroups->get('7290') ?: [], $groupDefaults);
+	echo json_encode($output, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR), "\n";
+} catch (\Throwable $exception) {
+	fwrite(STDERR, "CAPTURE_DIAGNOSTIC_FAILED: no exception details printed\n");
+	exit(1);
+}
+PHP
+```
+
+Return the diagnostic JSON before the field-compatibility patch is finalised.
+Values outside the safe enum/numeric sets remain redacted even for known fields;
+additional evidence may be needed for such mismatches. Regression fixtures must
+use synthetic identities/secrets with the observed field shapes and non-secret
+settings, not inferred GUI defaults. Existing synthetic profiles do not prove
+these five GUI-created objects are capture-compatible.
 
 ## Evidence And Limits
 

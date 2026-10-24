@@ -105,6 +105,14 @@ try {
     [$freePbx,$secret] = puddleFixture($root);
     $capture = (new FreePbxConfigurationCollector($freePbx,'pbx-puddle'))->capture();
     ConfigurationCapture::verifyHash($capture);
+    puddleCheck($capture['blockingGaps'] === [] && $capture['credentials']['state'] === 'not_configured',
+        'missing secret manifest is credential status, not incomplete non-secret configuration');
+    $previousCapture = ConfigurationCapture::create($capture['sourcePbxId'], $capture['modules'],
+        $capture['collections'], $capture['credentials'], ['CREDENTIALS:SECRET_MANIFEST_MISSING']);
+    $previousBytes = ConfigurationCapture::canonicalBytes($previousCapture);
+    ConfigurationCapture::verifyHash($previousCapture);
+    puddleCheck(ConfigurationCapture::canonicalBytes($previousCapture) === $previousBytes,
+        'previously retained snapshots with credential gaps keep their original canonical bytes and hash');
     puddleCheck(count($capture['collections']['ringgroups']['objects']) === 0
         && $capture['collections']['ringgroups']['state'] === 'captured'
         && $capture['credentials']['state'] === 'not_configured'

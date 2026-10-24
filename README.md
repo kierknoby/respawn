@@ -76,7 +76,15 @@ existing authenticated Stream connection and read back the exact snapshot from
 Pond. This retention path does not turn the snapshot into an executable
 blueprint, escrow credentials or claim recovery readiness. The deployed Pond
 still requires the documented two-file compatibility update before it accepts
-these capture methods; no live Pond or FreePBX test has been performed.
+these capture methods unless already updated by its operator. No live Pond or
+FreePBX test has been performed by this workspace.
+
+Operator-reported FreePBX 17 testing has since demonstrated authenticated
+publication and independent verification of an empty capture. Ordinary GUI-created
+extensions and a Ring Group are discovered but rejected by reconstruction-profile
+checks reused in capture. Credential readiness no longer adds configuration
+blocking gaps; the field-compatibility correction awaits the read-only diagnostic
+in the [Puddle capture guide](docs/puddle-capture.md#gui-compatibility-diagnostic).
 
 The intended recovery sequence is:
 
