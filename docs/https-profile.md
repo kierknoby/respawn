@@ -50,6 +50,7 @@ no later than five minutes after observation. Identity, method and schema must
 match; ok=false never implies success. Raw upstream errors are not exposed.
 
 Methods: capabilities, status, publish, retainRevision, retrieveRevision,
+retainConfigurationCapture, retrieveConfigurationCapture,
 escrowCredential, retrieveCredential, launch, operation, reconcile, cancel,
 activate and teardown. `advance` is prohibited. Status supplies publication
 {export, attempt, ack} and operations; ack has blueprintId, version, hash, at.
@@ -90,7 +91,7 @@ uses real local HTTP and the same public v2 request envelope. Its worker calls t
 shared Respawn application reconstruction planner/executor against a `SIMULATED`
 target, and its routing-model activation is not production readiness. The HTTPS
 adapter rejects explicit development/simulated operation and receipt markers;
-Local Pond evidence cannot satisfy its production activation checks.
+Development Pond evidence cannot satisfy its production activation checks.
 
 The application persists launch intent before I/O. Unknown responses leave the
 original request/key retryable, even after local policy changes. CLI supports
@@ -126,9 +127,25 @@ is required by the ordered source path. Retries freeze the same parent/key/ID.
 Older servers lacking that guarantee fail closed for ordered protection, not
 silently fall back to acceptance order. Existing stored heads remain selected.
 
+Capture-only Puddle snapshots use separate `retainConfigurationCapture` and
+`retrieveConfigurationCapture` methods. They bind the source PBX, connection,
+local revision ID, content hash and stable idempotency key. The Pond stores the
+exact `respawn.configuration-capture.v1` value in a separate object kind and
+returns `durably_retained_capture` only after commit. Identical retries return
+the immutable receipt; conflicting content for the same revision is rejected.
+The source retrieves the capture and revalidates its canonical hash and receipt
+before recording local read-back verification. These methods do not escrow
+credentials, change the executable recovery head, or assert recovery readiness;
+`recoveryReady` remains false.
+
 GUI provider mode exports the explicitly selected real Ring Groups/users/devices;
 it cannot
 silently send fixture blueprints. Launch blocks changed/unacknowledged configuration.
 Enrolment and revocation are local administrator commands in `pond/bin/pond.php`.
-Real public TLS, DNS and FreePBX service permissions remain unverified; the new
-service test uses authenticated loopback HTTP, not production TLS.
+On 24 October 2026 the operator confirmed the capture-only path over authenticated
+HTTPS between a FreePBX 17 / Asterisk 22 / Debian 12 host and a separate Debian
+13 Pond. Durable retention, immediate read-back and subsequent verification
+matched identifiers, hashes and receipts. This does not establish live credential
+recovery, executable reconstruction, broad compatibility or a production security
+assessment. Automated independent-process tests remain authenticated loopback
+HTTP and are not themselves public TLS evidence.

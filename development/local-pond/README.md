@@ -1,6 +1,6 @@
-# Development Pond / Local Pond Demonstration
+# Development Pond Demonstration
 
-# Local Pond is a separately implemented, development-only reference Pond
+# The Development Pond is a separately implemented, development-only reference
 controller
 using Respawn's public `respawn.provider-rpc.v2` envelope and reconstruction v2
 blueprint. It is not the closed-source production Pond, does not reproduce its
@@ -27,7 +27,7 @@ The private runtime root is `build/local-demo/`. Override the ports with
 unprivileged ports. Startup refuses to bind an occupied port or use runtime state
 outside the named build directory.
 
-Stop only the recorded, verified Local Pond/demo processes and retain state:
+Stop only the recorded, verified Development Pond/demo processes and retain state:
 
 ```sh
 sh development/local-pond/bin/stop.sh
@@ -55,12 +55,12 @@ XDEBUG_MODE=off python3 tests/local-pond.py
 1. Choose PBX Alpha or Bravo. The read-only fixture adapter displays two Core
    users, two fixed PJSIP devices, protected secret-reference presence and the
    dependent primary/fallback Ring Groups. No secret value is returned to the UI.
-2. Export the blueprint, then publish it. Local Pond validates the v2 schema,
+2. Export the blueprint, then publish it. The Development Pond validates the v2 schema,
    canonical hash, dependencies, source identity and selected coverage; it retains
    the accepted blueprint and version under the PBX and provider connection.
 3. Choose recovery/manual policy for simulated activation, select Normal run, and
    press **Respawn selected source**. The shared Respawn `Application` journals the
-   request and sends it through an actual authenticated HTTP request to Local Pond.
+   request and sends it through an actual authenticated HTTP request to the Development Pond.
 4. The separate worker allocates an operation-owned simulated replacement and runs
    the real `BuildExecutor`, `BuildSpec` planner, `FileSecrets`, `SimulatedPbx`,
    target-wide lock, checkpoints, object read-back and apply boundary. The screen
@@ -74,7 +74,7 @@ XDEBUG_MODE=off python3 tests/local-pond.py
 6. Tear down. The operation's simulated route is removed and `SimulatedPbx` removes
    only objects it owns. Shared/foreign objects remain visible as preserved.
 
-Refresh and opening a new browser session reload the persisted operation. The Local
+Refresh and opening a new browser session reload the persisted operation. The Development
 Pond and operator journal survive ordinary process restarts. No progress is advanced
 by a timer; the worker performs a stage, checkpoints it, and exposes its saved state.
 
@@ -106,21 +106,21 @@ enrolment or authentication design.
 | Executed locally for real | Deliberately simulated or not claimed |
 | --- | --- |
 | PHP built-in servers, real loopback HTTP request/response bytes, bearer-token verification, v2 envelope timestamps/schema/identity/connection checks | External provider, TLS, public DNS, enrolment service or production controller compatibility |
-| Respawn `Application`, `LocalPondProvider`, source fixture adapter, canonical blueprint/hash, BuildSpec planner, BuildExecutor and protected `FileSecrets` references | FreePBX install/runtime, Asterisk execution, generated configuration, SIP registration, live calls, bidirectional audio or production call/audio readiness |
+| Respawn `Application`, development-only `LocalPondProvider`, source fixture adapter, canonical blueprint/hash, BuildSpec planner, BuildExecutor and protected `FileSecrets` references | FreePBX install/runtime, Asterisk execution, generated configuration, SIP registration, live calls, bidirectional audio or production call/audio readiness |
 | Durable JSON state, publication/version retention, idempotency, operation lookup, reconciliation, worker queue/checkpoints, process restart and sanitised events | Replacement VM/container provisioning, real connectivity, firewall, routing/SBC enforcement or real resource receipts |
 | Actual simulated target objects/apply count/read-back and ownership-aware object/resource cleanup | Production credentials, real source secrets, hosting, billing, DOMAINTAINS or private provider APIs |
-| Activation changes the Local Pond routing model; the probe reads the built target's actual Ring Groups and selects the fallback extension | Production activation authority, fencing, readiness acceptance or takeover in minutes |
+| Activation changes the Development Pond routing model; the probe reads the built target's actual Ring Groups and selects the fallback extension | Production activation authority, fencing, readiness acceptance or takeover in minutes |
 
 Local readiness is always `SIMULATED_ONLY`. It is not encoded as production
-verification receipts. The production HTTPS adapter rejects the explicit Local
-Pond/development markers; its activation policy still requires fresh, bound
+verification receipts. The production HTTPS adapter rejects explicit development
+markers; its activation policy still requires fresh, bound
 production evidence, including registration, inbound/outbound calls and audio.
 
 Runtime-generated PBX tokens and synthetic authentication secrets are stored in
 mode-0700/0600 files beneath the ignored runtime root. Neither source fixtures nor
 blueprints include secret values. Do not copy runtime state into an archive or
 commit it. `tests/package.py` and the integration test assert that the module and
-cPanel packages contain no Local Pond, runtime state or credentials. Package
+cPanel packages contain no Development Pond code, runtime state or credentials. Package
 inclusion rules are intentionally explicit: `tools/package.py` archives only
 `module/` plus `LICENSE`; `tools/build_site.py` copies only `website/assets/` and
 `contracts/` into the cPanel build.

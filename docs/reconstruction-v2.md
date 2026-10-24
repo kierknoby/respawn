@@ -155,7 +155,7 @@ and always leaves runtimeVerified/callsVerified false without independent probes
 ## Revision Actions And Native Execution Status
 
 Local revision capture, comparison, planning and snapshot inspection are
-implemented. The Local Pond/synthetic targets exercise Revert and Regenerate
+implemented. The Development Pond/synthetic targets exercise Revert and Regenerate
 updates/removals through the shared planner and executor. These are simulation
 results, not native FreePBX write evidence.
 

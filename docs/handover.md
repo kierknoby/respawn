@@ -1,4 +1,4 @@
-# Respawn 0.0.1 Development Handover
+# Respawn 0.1.0 Development Handover
 
 ## Current Disposition
 
@@ -12,6 +12,13 @@ established end to end.
 The working tree is intended to remain local. Do not stage, commit, push, publish,
 deploy or run against a live PBX/provider without separate authorisation. Synthetic
 and contract tests do not establish live FreePBX, carrier, SBC or call behaviour.
+
+Respawn 0.1.0 includes public Stream and routing-control contracts with separate
+my-connect-style and Kamailio reference archives. These are provider-neutral
+examples, not dependencies or private-service compatibility claims. The
+Kamailio reference always blocks activation. Rebuild packages with
+`python3 tools/build_site.py && python3 tools/package.py`; no GitHub release or
+external deployment has been performed.
 
 ## Operation Status
 
@@ -44,7 +51,7 @@ retention and AES-GCM escrow with a Pond-held key, scoped local enrolment and
 recovery-only credentials. Reconciliation verifies exact password retrieval;
 the recovery CLI writes the existing native-compatible manifest. The independent
 service test restarts the Pond, deletes source files and verifies a simulated
-target with exact recovered passwords. Local Pond/MockProvider remain simulated.
+target with exact recovered passwords. Development Pond/MockProvider remain simulated.
 Public TLS, actual separate-host deployment, FreePBX cron and native execution
 have not been tested; no operational source-loss claim is authorised.
 
@@ -90,7 +97,7 @@ installs Chromium and treats browser failures as failures. Record actual command
 results for the checkout being handed over; older browser screenshots, source
 archives and exact counts are not assumed to be present or current.
 
-The Local Pond demonstration uses synthetic identities and data, loopback HTTP,
+The Development Pond demonstration uses synthetic identities and data, loopback HTTP,
 a simulated target and a local routing model. It does not prove FreePBX runtime,
 provider compatibility, SIP registration, live calls/audio or takeover. The static
 site and module packages can be regenerated under ignored `build/` and `artifacts/`

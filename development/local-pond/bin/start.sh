@@ -26,7 +26,7 @@ chmod 700 "$RESPAWN_LOCAL_DEMO_ROOT/processes" "$RESPAWN_LOCAL_DEMO_ROOT/logs"
 check_port() {
     "$PHP_BIN" -r '$socket = @fsockopen("127.0.0.1", (int) $argv[1], $errno, $error, 0.1); if ($socket) { fclose($socket); exit(1); }' "$1"
 }
-check_port "$RESPAWN_LOCAL_POND_PORT" || { printf '%s\n' 'Local Pond port is already in use.' >&2; exit 3; }
+check_port "$RESPAWN_LOCAL_POND_PORT" || { printf '%s\n' 'Development Pond port is already in use.' >&2; exit 3; }
 check_port "$RESPAWN_LOCAL_DASHBOARD_PORT" || { printf '%s\n' 'Dashboard port is already in use.' >&2; exit 3; }
 
 POND_PORT=$RESPAWN_LOCAL_POND_PORT
@@ -59,5 +59,5 @@ if [ "$ready" -ne 1 ]; then
     printf '%s\n' 'Startup failed; stop only these named processes with bin/stop.sh.' >&2
     exit 4
 fi
-printf 'Respawn Local Pond demonstration is running.\nBrowser: http://127.0.0.1:%s/\nStop: %s/bin/stop.sh\nReset: %s/bin/reset.sh\n' \
+printf 'Respawn Development Pond demonstration is running.\nBrowser: http://127.0.0.1:%s/\nStop: %s/bin/stop.sh\nReset: %s/bin/reset.sh\n' \
     "$DASHBOARD_PORT" "$LOCAL" "$LOCAL"

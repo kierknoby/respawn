@@ -36,7 +36,7 @@ it was not granted.
 | Scenario | Required behaviour | Status/evidence |
 | --- | --- | --- |
 | A / Individual PBX | Puddle/Stream/Pond operate without River or Lake | Standalone experimental Pond implemented; SQLite/AES-GCM loopback process and synthetic source-loss reconstruction tests pass; no real-host test |
-| B / Shared Pond | PBXs retain separate identity, revision and tenant scopes | Existing mock/Local Pond two-source tests; simulated |
+| B / Shared Pond | PBXs retain separate identity, revision and tenant scopes | Existing mock/Development Pond two-source tests; simulated |
 | C / Two Ponds | Authorised bilateral peers replicate exact immutable revision and receipt | Implemented in `FederatedPondLedger`; synthetic independent JSON stores tested |
 | D / Pond failure | Surviving authorised replica retrieves without source/Pond A storage | Sender state deleted and Pond B retrieval tested; synthetic only |
 | E / Network partition | Durable sender journal retries same transaction after reconnect | Local synthetic retry/idempotency behaviour tested; no network partition or real transport |
@@ -53,7 +53,7 @@ TLS/mTLS, digital signatures, operator identity, key rotation, replay windows,
 expiry, revocation propagation, relay behaviour, data residency, or encryption at
 rest. `approvedBy` in the local model is synthetic metadata, not an authenticated
 approval. The ledger accepts an asserted peer ID; it does not authenticate a key.
-The Local Pond HTTP service remains loopback-development only and its
+The Development Pond HTTP service remains loopback-development only and its
 bearer token is not a federation trust design.
 
 Blueprint-only River replication excludes plaintext credential material. The

@@ -60,3 +60,49 @@ lake_contract.validate({'schema':'respawn.lake-fleet-inventory.v1','tenantId':'t
         'protectionState':'replicated','replicas':[{'pondId':'pond-dev-b','revisionId':'rev-'+'a'*32,
             'contentHash':'b'*64,'state':'confirmed'}]}], 'updatedAt':'2026-10-23T00:00:00Z'})
 print('PASS: independent Draft 2020-12 validation for Pond identity, River agreements/messages/receipts, recovery delegation and Lake fleet inventory contracts')
+
+rpc_schema = json.loads((ROOT / 'contracts/provider-rpc.v2.schema.json').read_text())
+Draft202012Validator.check_schema(rpc_schema)
+rpc_validator = Draft202012Validator(rpc_schema)
+rpc_validator.validate({'schema':'respawn.provider-rpc.v2','connectionId':'https-v1:reference',
+    'method':'retainRevision','pbxId':'pbx-alpha','parameters':{},'requestId':'a'*32,
+    'sentAt':'2026-10-24T12:00:00Z'})
+rpc_validator.validate({'schema':'respawn.provider-rpc.v2','connectionId':'https-v1:reference',
+    'method':'retainConfigurationCapture','pbxId':'pbx-alpha','parameters':{},'requestId':'b'*32,
+    'sentAt':'2026-10-24T12:00:00Z'})
+rpc_validator.validate({'schema':'respawn.provider-rpc.v2','connectionId':'https-v1:reference',
+    'method':'retainRevision','pbxId':'pbx-alpha','ok':True,'observedAt':'2026-10-24T12:00:01Z',
+    'expiresAt':'2026-10-24T12:01:00Z','result':{}})
+rpc_validator.validate({'ok':False,'error':'POND_REQUEST_REJECTED'})
+invalid_rpc = {'schema':'respawn.provider-rpc.v2','connectionId':'https-v1:reference',
+    'method':'retainRevision','pbxId':'pbx-alpha','parameters':{},'requestId':'a'*32,
+    'sentAt':'2026-10-24T12:00:00Z','secret':'must-not-be-an-envelope-field'}
+assert list(rpc_validator.iter_errors(invalid_rpc)), 'Unknown RPC envelope field accepted'
+
+routing_schema = json.loads((ROOT / 'contracts/routing-control.v1.schema.json').read_text())
+Draft202012Validator.check_schema(routing_schema)
+routing_validator = Draft202012Validator(routing_schema)
+routing_request = {'schema':'respawn.routing-control.v1','action':'prepare','operationId':'op-test',
+    'pbxId':'pbx-alpha','targetId':'target-test','blueprintHash':'a'*64,'expectedRevision':2,
+    'authorityEpoch':1,'idempotencyKey':'b'*64,'readinessEvidence':[]}
+routing_validator.validate(routing_request)
+activation_request = dict(routing_request, action='activate', readinessEvidence=[
+    {'check':check,'state':'passed','evidenceRef':'evidence-'+str(index),
+     'observedAt':'2026-10-24T12:00:00Z','expiresAt':'2026-10-24T12:01:00Z'}
+    for index, check in enumerate(['blueprintCoverage','reconstruction','apply','configurationMatch',
+        'connectivity','routingPreparation','registration','inboundCall','outboundCall','bidirectionalAudio'])])
+routing_validator.validate(activation_request)
+incomplete_activation = dict(routing_request, action='activate')
+assert list(routing_validator.iter_errors(incomplete_activation)), 'Activation without complete evidence accepted'
+active_receipt = {'schema':'respawn.routing-control.v1','action':'activate','state':'active',
+    'operationId':'op-test','pbxId':'pbx-alpha','targetId':'target-test','blueprintHash':'a'*64,
+    'revision':2,'authorityEpoch':1,'observedAt':'2026-10-24T12:00:01Z','expiresAt':'2026-10-24T12:01:00Z',
+    'evidenceRef':'evidence-active','activationReceipt':'receipt-active'}
+routing_validator.validate(active_receipt)
+active_receipt.pop('activationReceipt')
+assert list(routing_validator.iter_errors(active_receipt)), 'Active routing receipt without activation receipt accepted'
+failed_receipt = {'schema':'respawn.routing-control.v1','action':'verify','state':'unavailable',
+    'operationId':'op-test','pbxId':'pbx-alpha','targetId':'target-test','blueprintHash':'a'*64,
+    'revision':2,'authorityEpoch':1,'observedAt':'2026-10-24T12:00:01Z','expiresAt':'2026-10-24T12:01:00Z'}
+assert list(routing_validator.iter_errors(failed_receipt)), 'Unavailable routing response without failure code accepted'
+print('PASS: Stream envelope and routing-control conformance schemas validate positive cases and reject unsafe unknown/incomplete data')

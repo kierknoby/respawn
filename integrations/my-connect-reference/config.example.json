@@ -1,0 +1,8 @@
+{
+  "schema": "respawn.provider-config.v1",
+  "adapterId": "https-json-v1",
+  "endpoint": "https://pond.example.invalid/rpc",
+  "credentialRef": "/etc/respawn/source.token",
+  "sourcePbxId": "replace-with-source-identity",
+  "allowedHosts": ["pond.example.invalid"]
+}

@@ -140,14 +140,14 @@ $csrfValue = htmlspecialchars($_SESSION['csrf'], ENT_QUOTES | ENT_SUBSTITUTE, 'U
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="robots" content="noindex,nofollow">
   <meta name="respawn-csrf" content="<?= $csrfValue ?>">
-  <title>Respawn / Local Pond demonstration</title>
+  <title>Respawn / Development Pond demonstration</title>
   <link rel="stylesheet" href="/assets/style.css">
   <script src="/assets/app.js" defer></script>
 </head>
 <body>
   <header class="topbar">
     <a class="brand" href="/" aria-label="Respawn local demonstration"><span class="brand-mark">R</span><span>RESPAWN</span></a>
-    <div class="environment"><span class="live-dot"></span>LOCAL POND / DEVELOPMENT ONLY</div>
+    <div class="environment"><span class="live-dot"></span>DEVELOPMENT POND / DEVELOPMENT ONLY</div>
   </header>
   <main class="shell">
     <section class="intro">
@@ -157,7 +157,7 @@ $csrfValue = htmlspecialchars($_SESSION['csrf'], ENT_QUOTES | ENT_SUBSTITUTE, 'U
     </section>
     <section class="three-rs" aria-label="Three recovery actions">
       <article><span class="eyebrow">01 / EXISTING PBX</span><h2>Revert</h2><p>Select an earlier retained revision and converge only its explicitly managed supported scope.</p></article>
-      <article><span class="eyebrow">02 / EXISTING PBX</span><h2>Regenerate</h2><p>Repair missing or changed supported objects toward the selected revision. It does not require Local Pond.</p></article>
+      <article><span class="eyebrow">02 / EXISTING PBX</span><h2>Regenerate</h2><p>Repair missing or changed supported objects toward the selected revision. It requires no remote provider.</p></article>
       <article><span class="eyebrow">03 / REPLACEMENT PBX</span><h2>Respawn</h2><p>Ask the provider to build a replacement, prepare simulated routing, then explicitly activate or tear down.</p></article>
     </section>
     <section class="revision-workspace" aria-labelledby="revisions-heading">
@@ -176,7 +176,7 @@ $csrfValue = htmlspecialchars($_SESSION['csrf'], ENT_QUOTES | ENT_SUBSTITUTE, 'U
     </section>
     <section class="controls" aria-label="Demonstration controls">
       <label>Source PBX<select id="pbx"><option value="pbx-alpha">PBX Alpha</option><option value="pbx-bravo">PBX Bravo</option></select></label>
-      <label>Local Pond connection<select id="connection"><option value="primary">Primary local path</option><option value="alternate">Alternate local path</option></select></label>
+      <label>Development Pond connection<select id="connection"><option value="primary">Primary local path</option><option value="alternate">Alternate local path</option></select></label>
       <label>Intent<select id="intent"><option value="recovery">Recovery</option><option value="rehearsal">Rehearsal</option><option value="standby">Standby</option></select></label>
       <label>Activation policy<select id="activation-policy"><option value="manual">Manual, simulated</option><option value="none">No activation</option></select></label>
       <label>Next scenario<select id="scenario"><option value="normal">Normal run</option><option value="accepted-response-lost">Accepted, response lost</option><option value="target-conflict">Conflicting target object</option><option value="unresolved-secret">Unresolved original secret</option><option value="apply-failure">Apply failure</option><option value="worker-interruption">Worker interruption</option><option value="expired-readiness">Expired simulated readiness</option><option value="cancel-during-work">Cancellation at next checkpoint</option><option value="partial-teardown">Partial teardown</option><option value="shared-resource">Preserve shared target object</option></select></label>
@@ -189,8 +189,8 @@ $csrfValue = htmlspecialchars($_SESSION['csrf'], ENT_QUOTES | ENT_SUBSTITUTE, 'U
     <div id="alert" class="alert" role="status" aria-live="polite" hidden></div>
     <div class="dashboard-grid">
       <section class="panel source-panel"><div class="panel-heading"><div><span class="eyebrow">01 / SOURCE PBX</span><h2>Supported configuration</h2></div><button class="text-button" data-action="export">Export blueprint</button></div><div id="source" class="source-content"></div></section>
-      <section class="panel blueprint-panel"><div class="panel-heading"><div><span class="eyebrow">02 / PUBLICATION</span><h2>Blueprint and coverage</h2></div><button class="text-button" data-action="publish">Publish to Local Pond</button></div><div id="publication"></div></section>
-      <section class="panel operation-panel"><div class="panel-heading"><div><span class="eyebrow">03 / LOCAL POND</span><h2>Authoritative operation</h2></div><span id="operation-state" class="state-pill">No operation</span></div><div id="operation"></div><div class="actions"><button id="cancel" type="button" disabled>Cancel work</button><button id="activate" type="button" disabled>Activate simulated route</button><button id="teardown" type="button" disabled>Tear down</button><button id="reconcile" type="button" disabled>Reconcile</button><button id="retry" type="button" disabled>Retry original</button></div></section>
+      <section class="panel blueprint-panel"><div class="panel-heading"><div><span class="eyebrow">02 / PUBLICATION</span><h2>Blueprint and coverage</h2></div><button class="text-button" data-action="publish">Publish to Development Pond</button></div><div id="publication"></div></section>
+      <section class="panel operation-panel"><div class="panel-heading"><div><span class="eyebrow">03 / DEVELOPMENT POND</span><h2>Authoritative operation</h2></div><span id="operation-state" class="state-pill">No operation</span></div><div id="operation"></div><div class="actions"><button id="cancel" type="button" disabled>Cancel work</button><button id="activate" type="button" disabled>Activate simulated route</button><button id="teardown" type="button" disabled>Tear down</button><button id="reconcile" type="button" disabled>Reconcile</button><button id="retry" type="button" disabled>Retry original</button></div></section>
       <section class="panel target-panel"><div class="panel-heading"><div><span class="eyebrow">04 / REPLACEMENT</span><h2>Target objects and order</h2></div><span class="simulated-label">SIMULATED TARGET</span></div><div id="target"></div></section>
       <section class="panel routing-panel"><div class="panel-heading"><div><span class="eyebrow">05 / CONNECTIVITY + ROUTING</span><h2>Preparation and model</h2></div><span class="simulated-label">NO SIP OR SBC</span></div><div id="routing"></div><div class="probe-controls"><label>Ring Group<input id="probe-group" value="600" inputmode="numeric" maxlength="8"></label><button id="probe" type="button">Run routing-model probe</button></div><pre id="probe-result" class="probe-result" hidden></pre></section>
       <section class="panel events-panel"><div class="panel-heading"><div><span class="eyebrow">06 / AUDIT TRAIL</span><h2>Sanitised events</h2></div></div><ol id="events" class="events"></ol></section>

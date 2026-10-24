@@ -196,11 +196,73 @@ class Respawn extends \FreePBX_Helpers implements \BMO
         public function captureLocalRevision(string $origin = 'manual_capture', ?array $publicationAcknowledgement = null): array
         {
             $settings = $this->settings();
-            if (!preg_match('/^[0-9]{2,8}(,[0-9]{2,8}){0,99}$/D', $settings['groups'] ?? '')) {
-                throw new \RuntimeException('EXPLICIT_SUPPORTED_SCOPE_REQUIRED');
+            if ($publicationAcknowledgement !== null) {
+                throw new \RuntimeException('PUDDLE_CAPTURE_CANNOT_ASSERT_PUBLICATION');
             }
-            $blueprint = $this->exportReconstruction(explode(',', $settings['groups']), $settings['secretManifest'] ?? null);
-            return $this->revisionStore()->capture($blueprint, $origin, $publicationAcknowledgement);
+            $capture = (new \Respawn\Reconstruction\FreePbxConfigurationCollector($this->FreePBX,
+                $settings['identity'], $settings['secretManifest'] ?? ''))->capture();
+            $revision = $this->revisionStore()->captureConfiguration($capture, $origin);
+            $credentialsIncomplete = in_array($revision['credentialStatus'], ['incomplete','not_configured'], true);
+            $captureState = !$revision['managedScope']['complete'] ? 'configuration_capture_incomplete'
+                : ($credentialsIncomplete ? ($revision['captureResult'] === 'unchanged'
+                    ? 'configuration_unchanged_credentials_incomplete' : 'configuration_captured_credentials_incomplete')
+                    : ($revision['captureResult'] === 'unchanged' ? 'configuration_unchanged' : 'configuration_captured'));
+            return ['state'=>$captureState,
+                'revisionId'=>$revision['revisionId'],'parentRevisionId'=>$revision['parentRevisionId'],
+                'contentHash'=>$revision['contentHash'],'unchanged'=>$revision['captureResult'] === 'unchanged',
+                'configurationComplete'=>$revision['managedScope']['complete'],
+                'credentialStatus'=>$revision['credentialStatus'],'recoveryReady'=>false,
+                'blockingGaps'=>$revision['coverage']['blockingGaps'] ?? []];
+        }
+
+        public function publishLocalConfigurationCapture(string $revisionId): array
+        {
+            $settings = $this->settings();
+            if (($settings['mode'] ?? '') !== 'provider') { throw new \RuntimeException('PUDDLE_PROVIDER_NOT_CONFIGURED'); }
+            $provider = new \Respawn\Provider\HttpsProvider($settings['providerConfiguration'] ?? []);
+            $store = $this->revisionStore();
+            $revision = $store->get($settings['identity'],$revisionId);
+            if (($revision['captureKind'] ?? '') !== 'configuration_capture') {
+                throw new \RuntimeException('PUDDLE_CAPTURE_REVISION_REQUIRED');
+            }
+            $retained = $provider->retainConfigurationCapture($settings['identity'],$revisionId,$revision['configurationCapture']);
+            $store->markConfigurationCaptureRetained($settings['identity'],$revisionId,$provider->connectionIdentity(),$retained['ack']);
+            $readBack = $provider->retrieveConfigurationCapture($settings['identity'],$revisionId);
+            if (($readBack['capture']['contentHash'] ?? '') !== $revision['contentHash']
+                || ($readBack['ack'] ?? null) !== $retained['ack']) {
+                throw new \RuntimeException('PUDDLE_READBACK_MISMATCH');
+            }
+            $store->markConfigurationCaptureVerified($settings['identity'],$revisionId,$provider->connectionIdentity(),
+                $retained['ack'],$readBack['capture']);
+            return ['state'=>'configuration_retained_and_readback_verified','revisionId'=>$revisionId,
+                'contentHash'=>$revision['contentHash'],'retentionReceipt'=>$retained['ack']['retentionReceipt'],
+                'providerVersion'=>$retained['ack']['version'],'credentialStatus'=>$revision['credentialStatus'],
+                'recoveryReady'=>false,'executable'=>false];
+        }
+
+        public function verifyLocalConfigurationCapture(string $revisionId): array
+        {
+            $settings = $this->settings();
+            if (($settings['mode'] ?? '') !== 'provider') { throw new \RuntimeException('PUDDLE_PROVIDER_NOT_CONFIGURED'); }
+            $provider = new \Respawn\Provider\HttpsProvider($settings['providerConfiguration'] ?? []);
+            $store = $this->revisionStore();
+            $revision = $store->get($settings['identity'],$revisionId);
+            if (($revision['captureKind'] ?? '') !== 'configuration_capture') {
+                throw new \RuntimeException('PUDDLE_CAPTURE_REVISION_REQUIRED');
+            }
+            $ack = $revision['retentionAcknowledgement'] ?? null;
+            if (!is_array($ack) || ($revision['retentionConnectionId'] ?? '') !== $provider->connectionIdentity()) {
+                throw new \RuntimeException('PUDDLE_CAPTURE_RETENTION_NOT_ACKNOWLEDGED');
+            }
+            $readBack = $provider->retrieveConfigurationCapture($settings['identity'],$revisionId);
+            if (($readBack['capture']['contentHash'] ?? '') !== $revision['contentHash'] || $readBack['ack'] !== $ack) {
+                throw new \RuntimeException('PUDDLE_READBACK_MISMATCH');
+            }
+            $store->markConfigurationCaptureVerified($settings['identity'],$revisionId,$provider->connectionIdentity(),
+                $ack,$readBack['capture']);
+            return ['state'=>'configuration_retention_readback_verified','revisionId'=>$revisionId,
+                'contentHash'=>$revision['contentHash'],'retentionReceipt'=>$ack['retentionReceipt'],
+                'credentialStatus'=>$revision['credentialStatus'],'recoveryReady'=>false,'executable'=>false];
         }
 
         public function recordPublicationRevision(array $acknowledgement): array
@@ -213,6 +275,7 @@ class Respawn extends \FreePBX_Helpers implements \BMO
                 throw new \RuntimeException('REVISION_PUBLICATION_ACK_INVALID');
             }
             foreach ($store->list($source) as $revision) {
+                if (($revision['captureKind'] ?? '') === 'configuration_capture') { continue; }
                 if (($revision['contentHash'] ?? '') !== $blueprint['contentHash']) { continue; }
                 $store->markPublished($source, $revision['revisionId'], $acknowledgement, $publication['connectionId']);
                 return $store->get($source, $revision['revisionId']);
@@ -231,7 +294,7 @@ class Respawn extends \FreePBX_Helpers implements \BMO
         public function inspectLocalRevision(string $revisionId): array
         {
             $revision = $this->revisionStore()->get($this->settings()['identity'], $revisionId);
-            unset($revision['blueprint'], $revision['pins'], $revision['recordHash']);
+            unset($revision['blueprint'], $revision['configurationCapture'], $revision['pins'], $revision['recordHash']);
             return $revision;
         }
 
@@ -347,6 +410,9 @@ class Respawn extends \FreePBX_Helpers implements \BMO
             $this->assertNoConflictingProviderOperation($settings['identity']);
             $revisions = $this->revisionStore();
             $revision = $revisions->get($settings['identity'], $revisionId);
+            if (($revision['captureKind'] ?? '') === 'configuration_capture') {
+                throw new \RuntimeException('PUDDLE_CAPTURE_NOT_EXECUTABLE');
+            }
             $target = $this->buildTarget();
             $catalog = $revisions->operationCatalogForRevision($settings['identity'], $revisionId);
             $snapshot = $target->reconciliationSnapshot(
@@ -433,11 +499,14 @@ class Respawn extends \FreePBX_Helpers implements \BMO
         }
         if (($settings['mode'] ?? '') === 'provider') {
             \Respawn\Provider\Configuration::validate($settings['providerConfiguration'] ?? []);
-            if (!preg_match('/^[0-9]{2,8}(,[0-9]{2,8}){0,99}$/D', $settings['groups'] ?? '')) {
-                throw new \RuntimeException('Explicit supported Ring Groups selection is required.');
+            $groups = $settings['groups'] ?? '';
+            if (!is_string($groups) || ($groups !== '' && !preg_match('/^[0-9]{2,8}(,[0-9]{2,8}){0,99}$/D', $groups))) {
+                throw new \RuntimeException('INVALID_RECONSTRUCTION_SCOPE');
             }
-            if (!is_string($settings['secretManifest'] ?? null) || !str_starts_with($settings['secretManifest'], '/')
-                || str_contains($settings['secretManifest'], '..')) { throw new \RuntimeException('Protected secret manifest reference required.'); }
+            $manifest = $settings['secretManifest'] ?? '';
+            if (!is_string($manifest) || ($manifest !== '' && (!str_starts_with($manifest, '/') || str_contains($manifest, '..')))) {
+                throw new \RuntimeException('SECRET_MANIFEST_REFERENCE_INVALID');
+            }
         }
         $this->setConfig('settings', array_intersect_key($settings, array_flip(['mode', 'identity', 'intent',
             'activationPolicy', 'providerConfiguration', 'groups', 'secretManifest', 'protectionEnabled',

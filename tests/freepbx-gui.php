@@ -17,14 +17,21 @@ final class GuiTestUser
 final class GuiTestConfig { public function get(string $key): string { return $GLOBALS['guiStateRoot']; } }
 final class GuiTestCore { public function listUsers(): array { return []; } }
 final class GuiTestRinggroups { public function get(string $number): array { return []; } }
+final class GuiTestModules
+{
+    public function checkStatus(string $name): bool { return true; }
+    public function getInfo(string $name): array { return [$name=>['version'=>'17.0.1']]; }
+}
 final class GuiTestFreePbx
 {
-    public object $Config; public object $Firewall; public object $Core; public object $Ringgroups; public object $astman;
+    public object $Config; public object $Firewall; public object $Core; public object $Ringgroups; public object $astman; public object $Modules;
     public PDO $Database;
     public function __construct()
     {
         $this->Config=new GuiTestConfig();$this->Firewall=new stdClass();$this->Core=new GuiTestCore();
-        $this->Ringgroups=new GuiTestRinggroups();$this->astman=new stdClass();$this->Database=new PDO('sqlite::memory:');
+        $this->Ringgroups=new GuiTestRinggroups();$this->astman=new stdClass();$this->Modules=new GuiTestModules();
+        $this->Database=new PDO('sqlite::memory:');
+        $this->Database->exec('CREATE TABLE devices (id TEXT, tech TEXT); CREATE TABLE ringgroups (grpnum TEXT);');
     }
 }
 final class FreePBX { public static object $respawn; public static function Respawn(): object { return self::$respawn; } }
@@ -67,6 +74,27 @@ try {
     $module=new \FreePBX\modules\Respawn(new GuiTestFreePbx());
     $module->install();$module->setCalls=0;
     $module->doConfigPageInit('respawn');
+    $initialCapture=$module->captureLocalRevision();
+    $sameCapture=$module->captureLocalRevision();
+    guiCheck(($initialCapture['state'] ?? '')==='configuration_captured'
+        && ($initialCapture['configurationComplete'] ?? false)===true
+        && ($initialCapture['credentialStatus'] ?? '')==='not_required'
+        && ($sameCapture['state'] ?? '')==='configuration_unchanged'
+        && ($initialCapture['revisionId'] ?? '')===($sameCapture['revisionId'] ?? ''),
+        'manual local capture works with provider disabled, no configured Ring Group scope, no objects, and no credential manifest');
+    $identity=$module->settings()['identity'];
+    $module->saveSettings(['mode'=>'provider','identity'=>$identity,'intent'=>'rehearsal','activationPolicy'=>'none',
+        'providerConfiguration'=>['schema'=>'respawn.provider-config.v1','adapterId'=>'https-json-v1',
+            'endpoint'=>'https://pond.example.invalid/rpc','credentialRef'=>'/etc/respawn/source.token',
+            'sourcePbxId'=>$identity,'allowedHosts'=>['pond.example.invalid']],
+        'groups'=>'','secretManifest'=>'','protectionEnabled'=>false,'protectionIntervalSeconds'=>300]);
+    guiCheck(($module->settings()['mode'] ?? '')==='provider' && ($module->settings()['groups'] ?? null)===''
+        && ($module->settings()['secretManifest'] ?? null)==='',
+        'Pond connection can be configured without Ring Group scope or a credential manifest');
+    $module->saveSettings(['mode'=>'disabled','identity'=>$identity,'intent'=>'rehearsal','activationPolicy'=>'none',
+        'groups'=>'','secretManifest'=>'','protectionEnabled'=>false,'protectionIntervalSeconds'=>300,
+        'providerConfiguration'=>[]]);
+    $module->setCalls=0;
     guiCheck(method_exists($module,'doConfigPageInit') && (new ReflectionMethod($module,'doConfigPageInit'))->getNumberOfRequiredParameters()===1,
         'BMO page-init hook implements the required one-argument lifecycle');
     guiCheck(isset($_SESSION['respawn_csrf']) && isset($_SESSION['respawn_launch_key']),'page lifecycle initializes existing session CSRF and launch tokens');
@@ -119,15 +147,23 @@ try {
     guiCheck(hash_file('sha256',$statePath)===$before,
         'repeated protection, conflict, publication and provider-status inspection preserve persistent state byte-for-byte');
     $page=file_get_contents(__DIR__.'/../module/page.respawn.php');
+    guiCheck(str_contains($page,'Supported configuration complete:')
+        && str_contains($page,'Independent recovery readiness:') && str_contains($page,'blockingGaps'),
+        'capture results can show collection completeness, credential status and sanitised blocking gaps separately');
+    guiCheck(str_contains($page,'Last retained revision') && str_contains($page,'Storage health')
+        && str_contains($page,'Recovery information') && str_contains($page,'Unavailable'),
+        'Pond diagnostics expose authenticated retention and recovery state without inventing unavailable values');
     foreach (['overview','protection','revisions','recovery','settings'] as $view) {
         guiCheck(\FreePBX\modules\Respawn::pageView($view)===$view && str_contains($page,"'".$view."'"),$view.' view is server-navigable');
     }
-    foreach (['revision-capture','revision-plan','revision-execute','revision-compare','capabilities','export','publish','verify',
+    foreach (['revision-capture','revision-publish','revision-verify','revision-plan','revision-execute','revision-compare','capabilities','export','publish','verify',
         'respawn','reconcileSubmission','retrySubmission','cancel','teardown','activate','refresh-status','protection-reconcile'] as $action) {
         $moduleSource=file_get_contents(__DIR__.'/../module/Respawn.class.php');
         $controllerSource=file_get_contents(__DIR__.'/../module/src/OperatorController.php');
+        $consoleSource=file_get_contents(__DIR__.'/../module/Console/Respawn.class.php');
         guiCheck(str_contains($page,'value="'.$action.'"') || str_contains($page,"'".$action."'")
-            || str_contains($moduleSource,"'".$action."'") || str_contains($controllerSource,"'".$action."'"),
+            || str_contains($moduleSource,"'".$action."'") || str_contains($controllerSource,"'".$action."'")
+            || str_contains($consoleSource,$action),
             $action.' remains accessible through the reorganized interface');
     }
     guiCheck(!str_contains($page,"REQUEST_METHOD'] === 'POST") && str_contains($page,'name="csrf"')

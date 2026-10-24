@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://respawn.in1.click/contracts/provider-rpc.v2.schema.json",
+  "title": "Respawn Stream provider RPC v2 envelope",
+  "description": "Provider-neutral HTTPS request/response envelope used by The Stream and The Pond. Method-specific parameters and results are validated by the receiver and client.",
+  "oneOf": [
+    { "$ref": "#/$defs/request" },
+    { "$ref": "#/$defs/response" },
+    { "$ref": "#/$defs/rejection" }
+  ],
+  "$defs": {
+    "identity": { "type": "string", "pattern": "^[a-zA-Z0-9._:-]{1,128}$" },
+    "timestamp": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(Z|[+-][0-9]{2}:[0-9]{2})$" },
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "connectionId", "method", "pbxId", "parameters", "requestId", "sentAt"],
+      "properties": {
+        "schema": { "const": "respawn.provider-rpc.v2" },
+        "connectionId": { "$ref": "#/$defs/identity" },
+        "method": { "enum": ["capabilities", "status", "publish", "retainRevision", "retrieveRevision", "latestRevision", "retainConfigurationCapture", "retrieveConfigurationCapture", "escrowCredential", "retrieveCredential", "launch", "operation", "reconcile", "cancel", "activate", "teardown"] },
+        "pbxId": { "type": "string", "pattern": "^[a-zA-Z0-9._-]{1,80}$" },
+        "parameters": { "type": "object" },
+        "requestId": { "type": "string", "pattern": "^[a-f0-9]{32}$" },
+        "sentAt": { "$ref": "#/$defs/timestamp" }
+      }
+    },
+    "response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "connectionId", "method", "pbxId", "ok", "observedAt", "expiresAt", "result"],
+      "properties": {
+        "schema": { "const": "respawn.provider-rpc.v2" },
+        "connectionId": { "$ref": "#/$defs/identity" },
+        "method": { "enum": ["capabilities", "status", "publish", "retainRevision", "retrieveRevision", "latestRevision", "retainConfigurationCapture", "retrieveConfigurationCapture", "escrowCredential", "retrieveCredential", "launch", "operation", "reconcile", "cancel", "activate", "teardown"] },
+        "pbxId": { "type": "string", "pattern": "^[a-zA-Z0-9._-]{1,80}$" },
+        "ok": { "const": true },
+        "observedAt": { "$ref": "#/$defs/timestamp" },
+        "expiresAt": { "$ref": "#/$defs/timestamp" },
+        "result": { "type": "object" }
+      }
+    },
+    "rejection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ok", "error"],
+      "properties": {
+        "ok": { "const": false },
+        "error": { "const": "POND_REQUEST_REJECTED" }
+      }
+    }
+  }
+}

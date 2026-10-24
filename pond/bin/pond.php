@@ -22,6 +22,9 @@ try {
         } finally { fclose($handle); }
         new Pond($directory, $keyFile);
         echo "Pond initialised. Back up the key separately; never store its only copy on the source PBX.\n";
+    } elseif ($action === 'status' && count($argv) === 4) {
+        [, , $directory, $keyFile] = $argv;
+        echo json_encode(Pond::health($directory, $keyFile), JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR) . "\n";
     } elseif (in_array($action, ['enrol','revoke'], true) && count($argv) === 6) {
         [$script, $action, $directory, $keyFile, $enrolmentFile, $tokenFile] = $argv;
         Pond::privatePath($enrolmentFile, false);
@@ -39,7 +42,7 @@ try {
         $provider = new HttpsProvider($configuration);
         echo json_encode(\Respawn\Pond\RecoveryBundle::write($provider, $configuration['sourcePbxId'], $output), JSON_THROW_ON_ERROR) . "\n";
     } else {
-        throw new RuntimeException('Usage: pond.php init STATE KEY | enrol|revoke STATE KEY ENROLMENT_JSON TOKEN_FILE | recover PROVIDER_CONFIG NEW_PRIVATE_DIRECTORY');
+        throw new RuntimeException('Usage: pond.php init STATE KEY | status STATE KEY | enrol|revoke STATE KEY ENROLMENT_JSON TOKEN_FILE | recover PROVIDER_CONFIG NEW_PRIVATE_DIRECTORY');
     }
 } catch (\Throwable $exception) {
     fwrite(STDERR, "Pond command failed; check protected inputs, permissions, enrolment and service availability.\n");

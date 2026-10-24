@@ -4,6 +4,7 @@ namespace Respawn\Provider;
 
 use Respawn\Diagnostic;
 use Respawn\Reconstruction\Blueprint;
+use Respawn\Reconstruction\ConfigurationCapture;
 use RuntimeException;
 
 final class HttpsProvider implements Provider, OrderedRetainedBlueprintProvider, RecoverableCredentialVault
@@ -60,6 +61,27 @@ final class HttpsProvider implements Provider, OrderedRetainedBlueprintProvider,
         if (isset($result['authorised']) && is_bool($result['authorised'])) { $safe['authorised'] = $result['authorised']; }
         if (isset($result['enrolmentState']) && in_array($result['enrolmentState'], ['not_enrolled','pending','authorised','revoked','unknown'], true)) {
             $safe['enrolmentState'] = $result['enrolmentState'];
+        }
+        if (is_string($result['pondId'] ?? null) && preg_match('/^pond-[a-f0-9]{32}$/D', $result['pondId'])) {
+            $safe['pondId'] = $result['pondId'];
+        }
+        if (in_array($result['storageHealth'] ?? null, ['healthy','degraded'], true)) { $safe['storageHealth'] = $result['storageHealth']; }
+        foreach (['recoveryInformationAvailable','retainedCredentialReferencesVerified'] as $field) {
+            if (is_bool($result[$field] ?? null)) { $safe[$field] = $result[$field]; }
+        }
+        if (is_int($result['retainedCredentialReferenceCount'] ?? null) && $result['retainedCredentialReferenceCount'] >= 0) {
+            $safe['retainedCredentialReferenceCount'] = $result['retainedCredentialReferenceCount'];
+        }
+        if (is_string($result['lastReceivedRevisionId'] ?? null)
+            && preg_match('/^rev-[a-f0-9]{32}$/D', $result['lastReceivedRevisionId'])) {
+            $safe['lastReceivedRevisionId'] = $result['lastReceivedRevisionId'];
+        }
+        if (is_string($result['configurationHash'] ?? null) && preg_match('/^[a-f0-9]{64}$/D', $result['configurationHash'])) {
+            $safe['configurationHash'] = $result['configurationHash'];
+        }
+        if (is_string($result['lastSuccessfulRetentionAt'] ?? null)
+            && strtotime($result['lastSuccessfulRetentionAt']) !== false) {
+            $safe['lastSuccessfulRetentionAt'] = $result['lastSuccessfulRetentionAt'];
         }
         if (isset($result['pendingChanges']) && is_bool($result['pendingChanges'])) { $safe['pendingChanges'] = $result['pendingChanges']; }
         if (isset($result['quarantinedLegacy']) && is_array($result['quarantinedLegacy'])) {
@@ -166,6 +188,66 @@ final class HttpsProvider implements Provider, OrderedRetainedBlueprintProvider,
             throw new RuntimeException('PROTECTION_RETRIEVAL_BINDING_INVALID');
         }
         return $retained;
+    }
+
+    public function retainConfigurationCapture(string $pbxId, string $revisionId, array $capture): array
+    {
+        if ($pbxId !== $this->configuration['sourcePbxId'] || !preg_match('/^rev-[a-f0-9]{32}$/D', $revisionId)) {
+            throw new RuntimeException('PUDDLE_RETENTION_BINDING_INVALID');
+        }
+        ConfigurationCapture::verifyHash($capture);
+        if (($capture['sourcePbxId'] ?? '') !== $pbxId || ($capture['credentials']['recoveryReady'] ?? true) !== false) {
+            throw new RuntimeException('PUDDLE_CAPTURE_SOURCE_MISMATCH');
+        }
+        $hash = $capture['contentHash'];
+        $idempotencyKey = hash('sha256', $this->connection . "\0" . $pbxId . "\0" . $revisionId . "\0" . $hash);
+        $result = $this->call('retainConfigurationCapture', ['pbxId'=>$pbxId,'revisionId'=>$revisionId,
+            'contentHash'=>$hash,'payload'=>$capture,'idempotencyKey'=>$idempotencyKey]);
+        $ack = $result['ack'] ?? null;
+        if (($result['state'] ?? '') !== 'durably_retained_capture' || !is_array($ack)
+            || ($ack['pbxId'] ?? '') !== $pbxId || ($ack['connectionId'] ?? '') !== $this->connection
+            || ($ack['revisionId'] ?? '') !== $revisionId || ($ack['captureId'] ?? '') !== $revisionId
+            || ($ack['contentHash'] ?? '') !== $hash || ($ack['idempotencyKey'] ?? '') !== $idempotencyKey
+            || !is_string($ack['retentionReceipt'] ?? null) || $ack['retentionReceipt'] === ''
+            || !is_string($ack['publicationId'] ?? null) || $ack['publicationId'] === ''
+            || !is_int($ack['version'] ?? null) || $ack['version'] < 1
+            || ($ack['recoveryReady'] ?? null) !== false) {
+            throw new RuntimeException('PUDDLE_DURABLE_ACK_INVALID');
+        }
+        return ['state'=>'durably_retained_capture','ack'=>$ack,'recoveryReady'=>false,
+            'credentialStatus'=>$result['credentialStatus'] ?? $capture['credentials']['state']];
+    }
+
+    public function retrieveConfigurationCapture(string $pbxId, string $revisionId): array
+    {
+        if ($pbxId !== $this->configuration['sourcePbxId'] || !preg_match('/^rev-[a-f0-9]{32}$/D', $revisionId)) {
+            throw new RuntimeException('PUDDLE_RETRIEVAL_BINDING_INVALID');
+        }
+        $result = $this->call('retrieveConfigurationCapture', ['pbxId'=>$pbxId,'revisionId'=>$revisionId]);
+        $capture = $result['capture'] ?? null;
+        $ack = $result['ack'] ?? null;
+        $expectedKey = is_array($capture) && is_string($capture['contentHash'] ?? null)
+            ? hash('sha256',$this->connection . "\0" . $pbxId . "\0" . $revisionId . "\0" . $capture['contentHash']) : '';
+        if (($result['state'] ?? '') !== 'retained_configuration_capture' || !is_array($capture) || !is_array($ack)
+            || ($result['simulated'] ?? false) === true
+            || in_array($result['mode'] ?? '', ['MOCK','SIMULATED','DEVELOPMENT'], true)
+            || ($result['pbxId'] ?? '') !== $pbxId || ($result['connectionId'] ?? '') !== $this->connection
+            || ($result['revisionId'] ?? '') !== $revisionId || ($ack['pbxId'] ?? '') !== $pbxId
+            || ($ack['connectionId'] ?? '') !== $this->connection || ($ack['revisionId'] ?? '') !== $revisionId
+            || ($ack['captureId'] ?? '') !== $revisionId || ($ack['idempotencyKey'] ?? '') !== $expectedKey
+            || ($ack['contentHash'] ?? '') !== ($capture['contentHash'] ?? '')
+            || !is_string($ack['retentionReceipt'] ?? null) || $ack['retentionReceipt'] === ''
+            || !is_string($ack['publicationId'] ?? null) || $ack['publicationId'] === ''
+            || !is_int($ack['version'] ?? null) || $ack['version'] < 1
+            || ($ack['recoveryReady'] ?? null) !== false || ($result['recoveryReady'] ?? null) !== false) {
+            throw new RuntimeException('PUDDLE_RETRIEVAL_BINDING_INVALID');
+        }
+        ConfigurationCapture::verifyHash($capture);
+        if (($capture['sourcePbxId'] ?? '') !== $pbxId || ($capture['credentials']['recoveryReady'] ?? true) !== false) {
+            throw new RuntimeException('PUDDLE_CAPTURE_SOURCE_MISMATCH');
+        }
+        return ['pbxId'=>$pbxId,'connectionId'=>$this->connection,'revisionId'=>$revisionId,
+            'ack'=>$ack,'capture'=>$capture,'recoveryReady'=>false];
     }
 
     public function retentionEvidenceMode(): string

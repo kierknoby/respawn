@@ -20,13 +20,13 @@ It writes only synthetic evidence under `artifacts/demo/` and never makes networ
 calls. The test suite adds forced publication, outages/retries, activation guards,
 partial failure/cleanup and delayed old teardown. These are not two real PBXs.
 
-## Local Pond End-To-End Demonstration
+## Development Pond End-To-End Demonstration
 
 This is a separate, real-process local HTTP demonstration. Exact start, browser,
 stop and marker-scoped reset commands are in
-[the Local Pond runbook](../development/local-pond/README.md). From the repository
+[the Development Pond runbook](../development/local-pond/README.md). From the repository
 root, run `sh development/local-pond/bin/start.sh`; it prints the browser URL. The
-interface drives `Application` and `LocalPondProvider` over authenticated loopback
+interface drives `Application` and the development-only `LocalPondProvider` over authenticated loopback
 HTTP, then a persistent worker executes the actual v2 reconstruction engine. The
 replacement and routing are simulated; no local demo evidence is production call,
 audio or provider readiness. `XDEBUG_MODE=off python3 tests/local-pond.py` starts
@@ -75,7 +75,7 @@ credentials or full PBX restoration.
 
 This workflow currently has only synthetic retention implementations. The HTTPS
 adapter defines `retainRevision`/`retrieveRevision`, but no external compatible
-controller is provided. `MockProvider` and Local Pond are development-only. Do not
+controller is provided. `MockProvider` and the Development Pond are development-only. Do not
 enable a real system schedule against them or describe their receipts as off-site
 protection. A real HTTPS provider also requires the FreePBX CLI PHP runtime's cURL
 extension and a protected bearer-credential file; no live provider test is in this

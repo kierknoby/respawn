@@ -11,6 +11,7 @@ use Respawn\Provider\HttpsProvider;
 use Respawn\Reconstruction\Blueprint;
 use Respawn\Reconstruction\BuildExecutor;
 use Respawn\Reconstruction\BuildSpec;
+use Respawn\Reconstruction\ConfigurationCapture;
 use Respawn\Reconstruction\FileSecrets;
 use Respawn\Reconstruction\RevisionStore;
 use Respawn\Reconstruction\SecretResolver;
@@ -33,6 +34,25 @@ function pondDenied(callable $operation, string $message): void
     $denied = false;
     try { $operation(); } catch (Throwable) { $denied = true; }
     pondAssert($denied, $message);
+}
+
+function pondConfigurationCapture(array $blueprint): array
+{
+    $modules = [];
+    foreach ($blueprint['modules'] as $name=>$version) {
+        $modules[$name] = ['available'=>true,'version'=>$version,'discoveryState'=>'known'];
+    }
+    $collections = ['core.users'=>['state'=>'captured','objects'=>[]],
+        'core.pjsip'=>['state'=>'captured','objects'=>[]],'ringgroups'=>['state'=>'captured','objects'=>[]]];
+    foreach (BuildSpec::plan($blueprint) as $operation) {
+        $type = $operation['object']['type'];
+        $collection = match ($type) { 'user'=>'core.users','pjsip'=>'core.pjsip',default=>'ringgroups' };
+        $collections[$collection]['objects'][] = ['id'=>$operation['object']['identity'],
+            'type'=>$operation['adapter'],'state'=>'captured','fields'=>$operation['parameters']];
+    }
+    return ConfigurationCapture::create($blueprint['sourcePbxId'],$modules,$collections,
+        ['state'=>'not_configured','references'=>[],'recoveryReady'=>false,'reasonCode'=>'SECRET_MANIFEST_MISSING'],
+        ['CREDENTIALS:SECRET_MANIFEST_MISSING']);
 }
 
 umask(0077);
@@ -84,12 +104,41 @@ try {
             $body = curl_exec($curl);
             $status = curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
             curl_close($curl);
-            if ($status !== 200 || !is_string($body)) { throw new RuntimeException('POND_TEST_HTTP_REJECTED'); }
+            if ($status !== 200 || !is_string($body)) { throw new RuntimeException('POND_TEST_HTTP_REJECTED_' . $status); }
             return json_decode($body, true, 64, JSON_THROW_ON_ERROR);
         };
     };
     $provider = new HttpsProvider($configuration, $transport($sourceToken));
     $blueprint = SimulatedPbx::blueprint('pbx-alpha');
+    $configurationCapture = pondConfigurationCapture($blueprint);
+    $captureRevisionId = 'rev-' . str_repeat('e',32);
+    $captureAck = $provider->retainConfigurationCapture('pbx-alpha',$captureRevisionId,$configurationCapture);
+    $duplicateCaptureAck = $provider->retainConfigurationCapture('pbx-alpha',$captureRevisionId,$configurationCapture);
+    pondAssert(($captureAck['ack']['contentHash'] ?? '') === $configurationCapture['contentHash']
+        && $duplicateCaptureAck['ack'] === $captureAck['ack']
+        && ($captureAck['recoveryReady'] ?? true) === false,
+        'Stream durably retains a secret-free capture with stable retry acknowledgement and no recovery-ready claim');
+    $readBackCapture = $provider->retrieveConfigurationCapture('pbx-alpha',$captureRevisionId);
+    pondAssert(($readBackCapture['capture']['contentHash'] ?? '') === $configurationCapture['contentHash']
+        && $readBackCapture['capture'] === $configurationCapture
+        && ($readBackCapture['recoveryReady'] ?? true) === false,
+        'independent Pond read-back returns the exact capture and verifies its content hash');
+    $otherTenantProvider = new HttpsProvider($configuration,$transport($otherToken));
+    pondDenied(static fn () => $otherTenantProvider->retrieveConfigurationCapture('pbx-alpha',$captureRevisionId),
+        'capture retrieval remains isolated to its enrolled Pond tenant');
+    $pondDatabase = new PDO('sqlite:' . $root . '/pond/pond.sqlite');
+    $captureScope = hash('sha256','tenant-a' . "\0" . 'pbx-alpha');
+    $tamperedCapture = $configurationCapture;
+    $tamperedCapture['collections']['core.users']['objects'][0]['fields']['name'] = 'Tampered';
+    $pondDatabase->prepare('UPDATE objects SET body=? WHERE scope=? AND kind=? AND id=?')->execute([
+        json_encode(['capture'=>$tamperedCapture,'ack'=>$captureAck['ack']],JSON_THROW_ON_ERROR),
+        $captureScope,'configurationCapture',$captureRevisionId]);
+    pondDenied(static fn () => $provider->retrieveConfigurationCapture('pbx-alpha',$captureRevisionId),
+        'capture read-back rejects stored data whose content hash no longer matches');
+    $pondDatabase->prepare('UPDATE objects SET body=? WHERE scope=? AND kind=? AND id=?')->execute([
+        json_encode(['capture'=>$configurationCapture,'ack'=>$captureAck['ack']],JSON_THROW_ON_ERROR),
+        $captureScope,'configurationCapture',$captureRevisionId]);
+    unset($pondDatabase);
     $manifest = ['sourcePbxId'=>'pbx-alpha','references'=>[]];
     $originalSecrets = [];
     foreach (BuildSpec::plan($blueprint) as $operation) {
@@ -183,10 +232,43 @@ try {
     pondRemove($root . '/source');
     proc_terminate($server); proc_close($server); $server = $start();
     pondAssert(!file_exists($root . '/source'), 'original source files, manifest, token, revisions and outbox are unavailable');
+    $database = new PDO('sqlite:' . $root . '/pond/pond.sqlite');
+    $storedQuery = $database->prepare('SELECT body FROM objects WHERE scope=? AND kind=? AND id=?');
+    $storedQuery->execute([hash('sha256', "tenant-a\0pbx-alpha"),'configurationCapture',$captureRevisionId]);
+    $storedCaptureRecord = json_decode($storedQuery->fetchColumn(), true, 64, JSON_THROW_ON_ERROR);
+    pondAssert(ConfigurationCapture::canonicalBytes($storedCaptureRecord['capture'])
+        === ConfigurationCapture::canonicalBytes($configurationCapture),
+        'capture payload is byte-equivalent in SQLite after process restart');
+    unset($database, $storedQuery, $storedCaptureRecord);
+    $restartedPond = new Pond($root . '/pond',$root . '/key');
+    $restartedCapture = $restartedPond->dispatch($recoveryToken,['schema'=>'respawn.provider-rpc.v2',
+        'connectionId'=>$connection,'method'=>'retrieveConfigurationCapture','pbxId'=>'pbx-alpha',
+        'parameters'=>['pbxId'=>'pbx-alpha','revisionId'=>$captureRevisionId],
+        'requestId'=>bin2hex(random_bytes(16)),'sentAt'=>gmdate(DATE_ATOM)]);
+    pondAssert(($restartedCapture['capture']['contentHash'] ?? '') === $configurationCapture['contentHash'],
+        'restarted Pond storage retains the capture object under the authorised read scope');
+    unset($restartedPond);
     $recovery = new HttpsProvider($configuration, $transport($recoveryToken));
+    $retainedCaptureAfterRestart = $recovery->retrieveConfigurationCapture('pbx-alpha',$captureRevisionId);
+    pondAssert(($retainedCaptureAfterRestart['capture']['contentHash'] ?? '') === $configurationCapture['contentHash'],
+        'capture-only revision remains independently retrievable after Pond process restart');
     $retained = $recovery->retrieveLatestRevision('pbx-alpha');
     Blueprint::verifyHash($retained['blueprint']);
     pondAssert($retained['revisionId'] === $latest['latestVerifiedRevisionId'], 'restarted independent Pond retrieves latest acknowledged revision after source loss');
+    $pondStatus = $recovery->status();
+    pondAssert(($pondStatus['lastReceivedRevisionId'] ?? '') === $retained['revisionId']
+        && ($pondStatus['configurationHash'] ?? '') === $retained['blueprint']['contentHash']
+        && ($pondStatus['storageHealth'] ?? '') === 'healthy'
+        && ($pondStatus['recoveryInformationAvailable'] ?? false) === true
+        && ($pondStatus['retainedCredentialReferenceCount'] ?? 0) > 0,
+        'authenticated Pond status reports its retained revision, healthy SQLite storage, and verified recovery credentials');
+    $databaseDigest = hash_file('sha256', $root . '/pond/pond.sqlite');
+    $localHealth = \Respawn\Pond\Pond::health($root . '/pond', $root . '/key');
+    pondAssert(($localHealth['state'] ?? '') === 'healthy' && ($localHealth['readOnly'] ?? false) === true
+        && ($localHealth['retainedRevisionCount'] ?? 0) > 0 && ($localHealth['encryptedCredentialCount'] ?? 0) > 0
+        && ($localHealth['recoveryMaterialAvailable'] ?? false) === true
+        && hash_file('sha256', $root . '/pond/pond.sqlite') === $databaseDigest,
+        'local Pond health command verifies recovery material and reports integrity without modifying SQLite');
     pondAssert($recovery->retrieveRevision('pbx-alpha', $initial['latestVerifiedRevisionId'])['revisionId'] === $initial['latestVerifiedRevisionId'],
         'older revision and original credential references survive rotation');
     pondDenied(static fn () => $recovery->escrowCredential('pbx-alpha', $reference, 'Different-Password-123456', hash('sha256','no-write')),
@@ -211,6 +293,10 @@ try {
         'existing reconstruction engine verifies simulated target with exact original/rotated passwords obtained only from independent Pond');
     $savedKey = file_get_contents($root . '/key');
     file_put_contents($root . '/key', random_bytes(32));
+    $wrongKeyHealth = \Respawn\Pond\Pond::health($root . '/pond', $root . '/key');
+    pondAssert(($wrongKeyHealth['state'] ?? '') === 'degraded'
+        && ($wrongKeyHealth['recoveryMaterialAvailable'] ?? true) === false,
+        'Pond health refuses recovery readiness when the configured master key does not match escrow records');
     pondDenied(static fn () => $recovery->retrieveCredential('pbx-alpha', $reference), 'wrong Pond decryption key cannot return a credential');
     file_put_contents($root . '/key', $savedKey);
     $database = new PDO('sqlite:' . $root . '/pond/pond.sqlite');

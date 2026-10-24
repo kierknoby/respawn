@@ -16,20 +16,28 @@ reconstruction alone is not telephony recovery.
 
 ## Ecosystem
 
-Respawn's target architecture has five logical components: **The Puddle** (formerly the Local Pond) is the
-PBX-local supported-state and revision cache; **The Stream** detects changes and
-publishes exact revisions; **The Pond** independently retains blueprints and
-coordinates authorised recovery; **The River** is peer-to-peer federation between
-Ponds; **The Lake** is optional fleet visibility and coordination. The Lake is
-not a data plane, sole repository or recovery dependency. River peers do not need
-a shared database or hosting provider.
+Respawn's target architecture has five logical components: **The Puddle** captures
+and tracks supported configuration on the originating PBX; **The Stream** detects
+changes and securely publishes exact revisions; **The Pond** independently
+retains blueprints and protected recovery information for authorised retrieval; **The River** is
+peer-to-peer federation between Ponds; **The Lake** is optional fleet visibility
+and coordination. The Lake is not a data plane, sole repository or recovery
+dependency. River peers do not need a shared database or hosting provider.
+
+Respawn 0.1.0 includes two public reference integrations: a my-connect-style
+adapter for the existing Stream contract and a Kamailio routing-control client
+that blocks activation by default. Neither depends on the named infrastructure;
+the downloadable archives and limitations are documented in
+[provider integrations](docs/provider-integrations.md).
 
 The Puddle/Stream coordinator connects to an experimental standalone
 [Pond service](pond/README.md): SQLite retention, AES-256-GCM credential escrow,
 scoped enrolment, replay rejection and independent recovery bundles. An independent
 loopback service test deletes source storage and reconstructs a simulated target
-with the exact retained passwords. Public TLS deployment and real FreePBX remain
-untested. The Puddle's separate federation ledger is synthetic; production River
+with the exact retained passwords. Operator-confirmed FreePBX capture and
+separate-host HTTPS configuration retention passed on 24 October 2026; live
+credential recovery and replacement reconstruction remain untested. The Puddle's
+separate federation ledger is synthetic; production River
 transport/security and Lake remain unimplemented. See [ecosystem architecture](docs/ecosystem-architecture.md),
 [River federation](docs/river-federation.md),
 [Lake fleet management](docs/lake-fleet-management.md), and
@@ -50,6 +58,41 @@ voicemail media, call detail records, logs or other historical data unless a
 separate recovery service supplies it.
 
 ## Blueprint And Recovery Path
+
+The initial reconstruction profile is intentionally limited. Respawn's long-term
+objective is comprehensive FreePBX configuration recovery through progressively
+expanded module support, not a permanent limit to the current profile. Current,
+developing, planned and under-investigation coverage is listed in the
+[module coverage roadmap](docs/capabilities-and-roadmap.md#freepbx-module-coverage).
+No universal module compatibility or full reconstruction capability is claimed.
+
+The Puddle independently discovers the supported local profile without an
+external provider or configured Ring Group list. Empty supported collections are
+valid. Local configuration capture and secret verification are separate, and a
+captured revision is not an executable recovery blueprint. See the
+[Puddle capture guide](docs/puddle-capture.md) for scope, safety and FreePBX test
+commands.
+
+The 0.1.0 prototype can separately publish a capture-only revision through the
+existing authenticated Stream connection and read back the exact snapshot from
+Pond. This retention path does not turn the snapshot into an executable
+blueprint, escrow credentials or claim recovery readiness. The deployed Pond
+requires the documented two-file compatibility update on older installations.
+The operator's independent Pond has accepted and verified populated captures.
+
+On 24 October 2026, operator-confirmed testing demonstrated complete capture of
+two Core users, two PJSIP devices and one Ring Group on FreePBX 17 / Asterisk 22 /
+Debian 12, with no configuration blocking gaps. Authenticated HTTPS publication
+to an independent Debian 13 Pond, immediate read-back and subsequent verification
+matched revision identifiers, content hashes and retention receipts. The result
+was `configurationComplete: true`, `retentionState: independently_readback_verified`,
+`credentialStatus: not_configured`, `recoveryReady: false`. Empty collections also
+passed earlier testing. These are live configuration-protection results, not
+native restoration, credential recovery, full PBX coverage or telephony evidence.
+Credential readiness remains separate from configuration completeness. See the
+[capture upgrade procedure](docs/puddle-capture.md#existing-010-capture-correction).
+The live-identified `secret_origional` SIP keyword is excluded as credential
+material alongside `secret` and `md5_cred`; its changes do not affect capture hashes.
 
 The intended recovery sequence is:
 
@@ -113,8 +156,9 @@ checks retrieved passwords for equality, retains the blueprint and verifies its
 retrieval. A separately held recovery token and Pond-side key remain necessary.
 The recovery CLI creates a protected native-compatible blueprint/secret bundle.
 Only verified external transport and credential checks can report
-`protected_and_current`; loopback/injected transports never do. This is not yet
-real off-site or FreePBX evidence. Install the supplied cron entry on the source
+`protected_and_current`; loopback/injected transports never do. This separate
+executable-blueprint/credential workflow has no live recovery evidence; the
+capture-only milestone does not establish scheduled protection. Install the supplied cron entry on the source
 and deploy the independent Pond only in an authorised isolated lab. See
 [the first-test procedure](docs/initial-test.md).
 
@@ -129,13 +173,14 @@ checks local prerequisites; source checks require an actual FreePBX host. See
 
 | Area | Locally implemented and tested | Not established |
 | --- | --- | --- |
-| Reconstruction | Typed selected user/device/group profile, dependency planning, preflight, checkpoints, conflict handling, apply boundary and read-back contracts | Real FreePBX installation/reconstruction or full PBX coverage |
+| Configuration protection | Real FreePBX capture of five supported objects, separate-host authenticated HTTPS retention, immediate and subsequent matching read-back | Full PBX coverage, credential recovery or executable restoration |
+| Reconstruction | Typed selected user/device/group profile, dependency planning, preflight, checkpoints, conflict handling, apply boundary and read-back contracts | Live replacement reconstruction or full PBX coverage |
 | Revisions | Capture, comparison, planning, synthetic Revert/Regenerate execution and acknowledgement binding | Native destructive/update execution or native ownership proof |
 | Provider workflow | Mock orchestration, neutral HTTPS contract tests, persistent local simulation and explicit policy gates | Real provider compatibility, provisioning, connectivity or SBC control |
-| Protection lifecycle | Coordinator, pinned FIFO retry outbox, standalone SQLite Pond, AES-GCM escrow, source-free native-compatible recovery bundle and independent-process test | Host cron installation, public TLS deployment, hardware durability and real FreePBX testing |
+| Protection lifecycle | Coordinator, pinned FIFO retry outbox, standalone SQLite Pond, AES-GCM escrow, source-free native-compatible recovery bundle and independent-process test | Host-scheduled blueprint protection, live credential recovery and hardware durability |
 | Recovery evidence | Synthetic tests, schema/hash validation, package/build checks | Live registration, inbound/outbound calls, bidirectional audio or measured RTO |
 
-The project is a development foundation, not a production recovery service. Native
+The project is a working configuration-protection prototype, not a production recovery service. Native
 Revert and Regenerate controls remain read-only where the adapter lacks required
 capabilities. The native adapter currently permits selected creates only; its
 revision target rejects updates/removals and marks ownership unverified; GUI and
@@ -155,10 +200,10 @@ administrator runs `fwconsole` as root. The root-only `storage-repair` command i
 restricted to validated Respawn files under `ASTVARLIBDIR/respawn`; credential
 files and Pond keys are deliberately outside that repair scope.
 
-The module targets FreePBX 17 and PHP 8.2+ conventions. It is experimental and
-has not been established as installable on a real FreePBX host. Do not install it
-on a production PBX. No deployment, live provider test or production change is
-part of this repository workflow.
+The module targets FreePBX 17 and PHP 8.2+ conventions. Installation, supported
+capture and independent HTTPS configuration retention have operator-confirmed
+development-host evidence. It remains experimental; do not install it on a
+production PBX. No production deployment or recovery execution is implied.
 
 Install development dependencies and run the local gates:
 
@@ -180,25 +225,32 @@ archives using fresh filesystem metadata, including a verified PHP 8.3.6 CI
 compatibility correction. Exact reproduction and test evidence are recorded in
 [validation history](docs/validation.md).
 
-The isolated [Local Pond development demo](development/local-pond/README.md) uses
+The isolated [Development Pond demonstration](development/local-pond/README.md) uses
 loopback HTTP, synthetic data and a simulated target. It is excluded from the
 module and website packages and does not prove FreePBX, SIP, call/audio or provider
 integration. The static site is built with `python3 tools/build_site.py`; packages
 are generated under ignored `artifacts/` by `python3 tools/package.py`.
 
+The 0.1.0 website update includes the full project welcome, the dedicated
+"Why Respawn?" argument, local Revert and independent-protection paths, and a
+dated evidence boundary. All eleven pages plus the 404 page are checked from the
+extracted static ZIP at desktop, mobile and narrow-mobile widths. No website
+deployment is part of this update.
+
 ## Roadmap
 
-1. Prove module installation, permissions, settings, CLI discovery and the
-   supported create/reload/read-back profile and host-scheduled reconciliation on
-   disposable FreePBX 17 hosts.
+1. Extend the confirmed installation/capture evidence with permission and settings
+   tests, the supported create/reload/read-back profile and host-scheduled
+   reconciliation on disposable FreePBX 17 hosts.
 2. Implement and independently verify safe native updates, removals and ownership
    tracking before making Revert or Regenerate executable.
 3. Prove the implemented standalone Pond's immutable secret-reference continuity
    over authorised separate-host HTTPS, with independent key/token custody and
    the original source unavailable; current evidence is local independent-process
-   testing with synthetic PBX state.
-4. Expand supported reconstruction to trunks, inbound/outbound routes, numbering,
-   destinations and other required modules, with dependency and coverage checks.
+   testing with synthetic PBX state. The reproducible Pond ZIP is generated under
+   `artifacts/respawn-pond-0.1.0.zip` by the package command.
+4. Expand module-by-module reconstruction coverage according to the published
+   roadmap, with dependency, version-compatibility and coverage checks.
 5. Integrate provider-controlled replacement provisioning, connectivity and SBC
    preparation/activation under explicit authority fencing.
 6. Verify registration and independent inbound/outbound calls with bidirectional
@@ -212,9 +264,13 @@ Dependencies, proof requirements and sequencing are detailed in the
 
 - [Architecture](docs/architecture.md)
 - [Reconstruction profile and lab requirements](docs/reconstruction-v2.md)
+- [Puddle discovery, capture status and FreePBX test procedure](docs/puddle-capture.md)
 - [Initial FreePBX 17 source-to-target test](docs/initial-test.md)
 - [Capabilities and roadmap](docs/capabilities-and-roadmap.md)
 - [Provider contracts](docs/provider-contracts.md)
+- [Provider-neutral integrations and 0.1.0 packages](docs/provider-integrations.md)
+- [my-connect-style Stream reference](integrations/my-connect-reference/README.md)
+- [Kamailio routing-control reference](integrations/kamailio-reference/README.md)
 - [Complete ecosystem architecture](docs/ecosystem-architecture.md)
 - [River peer federation](docs/river-federation.md)
 - [Lake fleet management](docs/lake-fleet-management.md)

@@ -82,6 +82,131 @@ final class RevisionStore
         });
     }
 
+    public function captureConfiguration(array $capture, string $origin = 'manual_capture'): array
+    {
+        ConfigurationCapture::verifyHash($capture);
+        if (!in_array($origin, ['manual_capture','automatic_reconciliation'], true)) {
+            throw new RuntimeException('REVISION_CAPTURE_ORIGIN_INVALID');
+        }
+        $source = $capture['sourcePbxId'];
+        $objectIds = [];
+        $collectionsComplete = true;
+        foreach ($capture['collections'] as $collectionName => $collection) {
+            if (($collection['state'] ?? '') !== 'captured') { $collectionsComplete = false; }
+            foreach ($collection['objects'] ?? [] as $object) {
+                $objectIds[] = self::captureObjectId($collectionName, $object['id']);
+                if (($object['state'] ?? '') !== 'captured') { $collectionsComplete = false; }
+            }
+        }
+        sort($objectIds, SORT_STRING);
+        $nonCredentialGaps = array_values(array_filter($capture['blockingGaps'],
+            static fn (string $gap): bool => !str_starts_with($gap, 'CREDENTIALS:')));
+        $configurationComplete = $collectionsComplete && $nonCredentialGaps === [];
+        return $this->store->update(function (array &$state) use ($capture, $source, $origin, $objectIds, $configurationComplete): array {
+            $parent = $state['revisionHeads'][$source]['lastCapturedRevisionId'] ?? null;
+            if (is_string($parent)) {
+                $previous = $state['revisions'][$source][$parent] ?? null;
+                if (is_array($previous) && ($previous['captureKind'] ?? '') === 'configuration_capture') {
+                    self::validate($previous, $source, $parent);
+                }
+                if (is_array($previous) && ($previous['captureKind'] ?? '') === 'configuration_capture'
+                    && ($previous['contentHash'] ?? '') === $capture['contentHash']) {
+                    return self::publicRevision($previous) + ['captureResult'=>'unchanged'];
+                }
+            }
+            $sequence = (int) ($state['revisionSequences'][$source] ?? count($state['revisions'][$source] ?? [])) + 1;
+            $revisionId = 'rev-' . bin2hex(random_bytes(16));
+            $managedIds = $objectIds;
+            foreach ($state['revisions'][$source] ?? [] as $previous) {
+                if (($previous['captureKind'] ?? '') !== 'configuration_capture') { continue; }
+                foreach ($previous['managedScope']['objectIds'] ?? [] as $id) { $managedIds[] = $id; }
+            }
+            $managedIds = array_values(array_unique($managedIds));
+            sort($managedIds, SORT_STRING);
+            $revision = ['schema'=>'respawn.local-revision.v1','revisionId'=>$revisionId,'sourcePbxId'=>$source,
+                'blueprintSchemaVersion'=>1,'captureKind'=>'configuration_capture','contentHash'=>$capture['contentHash'],
+                'parentRevisionId'=>$parent,'sequence'=>$sequence,'capturedAt'=>gmdate(DATE_ATOM),
+                'captureOrigin'=>$origin,'moduleVersions'=>$capture['modules'],'objects'=>$objectIds,
+                'managedScope'=>['complete'=>$configurationComplete,'objectIds'=>$managedIds],
+                'coverage'=>['state'=>$configurationComplete?'complete':'incomplete',
+                    'blockingGaps'=>$capture['blockingGaps']],
+                'secretReferences'=>$capture['credentials']['references'],
+                'credentialStatus'=>$capture['credentials']['state'],'recoveryReady'=>false,
+                'configurationCapture'=>$capture,'publicationAcknowledgement'=>null,
+                'verificationEvidence'=>null,'classification'=>$configurationComplete
+                    ? 'captured_configuration_recovery_not_verified' : 'incomplete_configuration_capture','pins'=>[]];
+            $revision['recordHash'] = self::recordHash($revision);
+            $state['revisions'][$source][$revisionId] = $revision;
+            $state['revisionSequences'][$source] = $sequence;
+            $state['revisionHeads'][$source]['lastCapturedRevisionId'] = $revisionId;
+            if ($configurationComplete) { $state['revisionHeads'][$source]['lastCompleteConfigurationRevisionId'] = $revisionId; }
+            $this->pruneState($state, $source);
+            if (count($state['revisions'][$source]) > ($state['revisionRetentionLimit'] ?? $this->retentionLimit)) {
+                throw new RuntimeException('REVISION_RETENTION_BLOCKED_BY_PINNED_HISTORY');
+            }
+            return self::publicRevision($revision) + ['captureResult'=>'captured'];
+        });
+    }
+
+    public function markConfigurationCaptureRetained(string $source, string $revisionId,
+        string $connectionId, array $acknowledgement): void
+    {
+        $revision = $this->get($source,$revisionId);
+        if (($revision['captureKind'] ?? '') !== 'configuration_capture') { throw new RuntimeException('PUDDLE_CAPTURE_NOT_EXECUTABLE'); }
+        $captureHash = $revision['contentHash'];
+        $expectedKey = hash('sha256',$connectionId . "\0" . $source . "\0" . $revisionId . "\0" . $captureHash);
+        if ($connectionId === '' || ($acknowledgement['pbxId'] ?? '') !== $source
+            || ($acknowledgement['connectionId'] ?? '') !== $connectionId
+            || ($acknowledgement['revisionId'] ?? '') !== $revisionId
+            || ($acknowledgement['captureId'] ?? '') !== $revisionId
+            || ($acknowledgement['contentHash'] ?? '') !== $captureHash
+            || ($acknowledgement['idempotencyKey'] ?? '') !== $expectedKey
+            || !is_string($acknowledgement['retentionReceipt'] ?? null) || $acknowledgement['retentionReceipt'] === ''
+            || !is_string($acknowledgement['publicationId'] ?? null) || $acknowledgement['publicationId'] === ''
+            || !is_int($acknowledgement['version'] ?? null) || $acknowledgement['version'] < 1
+            || ($acknowledgement['recoveryReady'] ?? null) !== false) {
+            throw new RuntimeException('PUDDLE_DURABLE_ACK_INVALID');
+        }
+        $this->store->update(function (array &$state) use ($source,$revisionId,$connectionId,$acknowledgement): void {
+            $revision = &$state['revisions'][$source][$revisionId];
+            if (($revision['captureKind'] ?? '') !== 'configuration_capture') { throw new RuntimeException('PUDDLE_CAPTURE_NOT_EXECUTABLE'); }
+            if (isset($revision['retentionAcknowledgement'])
+                && $revision['retentionAcknowledgement'] !== $acknowledgement) {
+                throw new RuntimeException('PUDDLE_DURABLE_ACK_CONFLICT');
+            }
+            $revision['retentionConnectionId'] = $connectionId;
+            $revision['retentionAcknowledgement'] = $acknowledgement;
+            $revision['retentionState'] = 'durably_retained_unverified';
+            $revision['recordHash'] = self::recordHash($revision);
+        });
+    }
+
+    public function markConfigurationCaptureVerified(string $source, string $revisionId,
+        string $connectionId, array $acknowledgement, array $retainedCapture): void
+    {
+        $revision = $this->get($source,$revisionId);
+        if (($revision['captureKind'] ?? '') !== 'configuration_capture') { throw new RuntimeException('PUDDLE_CAPTURE_NOT_EXECUTABLE'); }
+        ConfigurationCapture::verifyHash($retainedCapture);
+        if (($retainedCapture['sourcePbxId'] ?? '') !== $source
+            || ($retainedCapture['contentHash'] ?? '') !== $revision['contentHash']
+            || ($revision['retentionConnectionId'] ?? '') !== $connectionId
+            || ($revision['retentionAcknowledgement'] ?? null) !== $acknowledgement
+            || ($acknowledgement['connectionId'] ?? '') !== $connectionId
+            || ($acknowledgement['revisionId'] ?? '') !== $revisionId
+            || ($acknowledgement['contentHash'] ?? '') !== $revision['contentHash']) {
+            throw new RuntimeException('PUDDLE_READBACK_MISMATCH');
+        }
+        $this->store->update(function (array &$state) use ($source,$revisionId,$connectionId,$acknowledgement): void {
+            $revision = &$state['revisions'][$source][$revisionId];
+            $revision['retentionState'] = 'independently_readback_verified';
+            $revision['retentionVerifiedAt'] = gmdate(DATE_ATOM);
+            $revision['retentionConnectionId'] = $connectionId;
+            $revision['retentionAcknowledgement'] = $acknowledgement;
+            $revision['recoveryReady'] = false;
+            $revision['recordHash'] = self::recordHash($revision);
+        });
+    }
+
     public function list(string $source): array
     {
         return $this->store->inspect(static function (array $state) use ($source): array {
@@ -132,8 +257,8 @@ final class RevisionStore
     {
         $from = $this->get($source, $fromId);
         $to = $this->get($source, $toId);
-        $left = self::operationMap($from['blueprint']);
-        $right = self::operationMap($to['blueprint']);
+        $left = self::revisionObjectMap($from);
+        $right = self::revisionObjectMap($to);
         $changes = ['create' => [], 'update' => [], 'remove' => [], 'unchanged' => []];
         foreach (array_unique(array_merge(array_keys($left), array_keys($right))) as $id) {
             if (!isset($left[$id])) { $changes['create'][] = $id; }
@@ -144,6 +269,10 @@ final class RevisionStore
         }
         return ['sourcePbxId' => $source, 'fromRevisionId' => $fromId, 'toRevisionId' => $toId,
             'fromHash' => $from['contentHash'], 'toHash' => $to['contentHash'], 'changes' => $changes,
+            'captureMetadataChanged' => ($from['coverage'] ?? null) !== ($to['coverage'] ?? null)
+                || ($from['credentialStatus'] ?? null) !== ($to['credentialStatus'] ?? null)
+                || ($from['moduleVersions'] ?? null) !== ($to['moduleVersions'] ?? null)
+                || ($from['secretReferences'] ?? []) !== ($to['secretReferences'] ?? []),
             'providerReconciliationRequired' => $fromId !== $toId,
             'message' => 'Local configuration comparison does not reverse provider routing, billing or authority.'];
     }
@@ -159,6 +288,9 @@ final class RevisionStore
     public function operationCatalogForRevision(string $source, string $revisionId): array
     {
         $selected = $this->get($source, $revisionId);
+        if (($selected['captureKind'] ?? '') === 'configuration_capture') {
+            throw new RuntimeException('PUDDLE_CAPTURE_NOT_EXECUTABLE');
+        }
         $catalog = self::operationCatalog($selected['blueprint']);
         $history = $this->store->inspect(static function (array $state) use ($source): array {
             return array_values(array_reverse($state['revisions'][$source] ?? [], true));
@@ -166,6 +298,7 @@ final class RevisionStore
         foreach ($history as $revision) {
             try { self::validate($revision, $source, $revision['revisionId'] ?? ''); }
             catch (\Throwable) { continue; }
+            if (($revision['captureKind'] ?? '') === 'configuration_capture') { continue; }
             foreach (BuildSpec::plan($revision['blueprint']) as $operation) {
                 $catalog[$operation['id']] ??= $operation;
             }
@@ -177,6 +310,7 @@ final class RevisionStore
     public function markPublished(string $source, string $revisionId, array $acknowledgement, string $connectionId): void
     {
         $revision = $this->get($source, $revisionId);
+        if (($revision['captureKind'] ?? '') === 'configuration_capture') { throw new RuntimeException('PUDDLE_CAPTURE_NOT_EXECUTABLE'); }
         self::assertPublicationAcknowledgement($source, $revision['contentHash'], $acknowledgement, $connectionId);
         $this->store->update(function (array &$state) use ($source, $revisionId, $acknowledgement): void {
             $entry = &$state['revisions'][$source][$revisionId];
@@ -234,7 +368,8 @@ final class RevisionStore
 
     public function checkpointCurrentState(string $source, string $revisionId, array $scope, array $snapshot, string $planId): string
     {
-        $this->get($source, $revisionId);
+        $revision = $this->get($source, $revisionId);
+        if (($revision['captureKind'] ?? '') === 'configuration_capture') { throw new RuntimeException('PUDDLE_CAPTURE_NOT_EXECUTABLE'); }
         $normalized = DesiredStatePlanner::normaliseSnapshot($snapshot);
         if (($scope['complete'] ?? false) !== true) { throw new RuntimeException('PRE_OPERATION_SCOPE_INCOMPLETE'); }
         $checkpointId = 'checkpoint-' . bin2hex(random_bytes(12));
@@ -293,7 +428,8 @@ final class RevisionStore
 
     public function markApplied(string $source, string $revisionId, array $scope, array $verification): void
     {
-        $this->get($source, $revisionId);
+        $revision = $this->get($source, $revisionId);
+        if (($revision['captureKind'] ?? '') === 'configuration_capture') { throw new RuntimeException('PUDDLE_CAPTURE_NOT_EXECUTABLE'); }
         $this->store->update(function (array &$state) use ($source, $revisionId, $scope, $verification): void {
             $state['revisionHeads'][$source]['lastAppliedRevisionId'] = $revisionId;
             $revision = &$state['revisions'][$source][$revisionId];
@@ -338,11 +474,23 @@ final class RevisionStore
     private static function validate(array $revision, string $source, string $revisionId): void
     {
         if (($revision['schema'] ?? '') !== 'respawn.local-revision.v1' || ($revision['revisionId'] ?? '') !== $revisionId
-            || ($revision['sourcePbxId'] ?? '') !== $source || ($revision['blueprintSchemaVersion'] ?? 0) !== 2
-            || !is_array($revision['blueprint'] ?? null) || !is_array($revision['managedScope'] ?? null)
+            || ($revision['sourcePbxId'] ?? '') !== $source || !is_array($revision['managedScope'] ?? null)
             || !is_array($revision['pins'] ?? null)) { throw new RuntimeException('REVISION_SCHEMA_UNSUPPORTED'); }
         $expected = $revision['recordHash'] ?? '';
         if (!is_string($expected) || !hash_equals(self::recordHash($revision), $expected)) { throw new RuntimeException('REVISION_INTEGRITY_FAILED'); }
+        if (($revision['captureKind'] ?? '') === 'configuration_capture') {
+            if (($revision['blueprintSchemaVersion'] ?? 0) !== 1 || !is_array($revision['configurationCapture'] ?? null)) {
+                throw new RuntimeException('REVISION_SCHEMA_UNSUPPORTED');
+            }
+            ConfigurationCapture::verifyHash($revision['configurationCapture']);
+            if (($revision['contentHash'] ?? '') !== $revision['configurationCapture']['contentHash']) {
+                throw new RuntimeException('REVISION_BLUEPRINT_HASH_MISMATCH');
+            }
+            return;
+        }
+        if (($revision['blueprintSchemaVersion'] ?? 0) !== 2 || !is_array($revision['blueprint'] ?? null)) {
+            throw new RuntimeException('REVISION_SCHEMA_UNSUPPORTED');
+        }
         Blueprint::verifyHash($revision['blueprint']);
         if (($revision['contentHash'] ?? '') !== $revision['blueprint']['contentHash']) { throw new RuntimeException('REVISION_BLUEPRINT_HASH_MISMATCH'); }
     }
@@ -356,7 +504,7 @@ final class RevisionStore
     private static function publicRevision(array $revision): array
     {
         $safe = $revision;
-        unset($safe['blueprint'], $safe['pins'], $safe['recordHash']);
+        unset($safe['blueprint'], $safe['configurationCapture'], $safe['pins'], $safe['recordHash']);
         $safe['pinned'] = !empty($revision['pins']);
         $safe['pinCount'] = count($revision['pins'] ?? []);
         return $safe;
@@ -365,8 +513,39 @@ final class RevisionStore
     private static function operationMap(array $blueprint): array
     {
         $map = [];
-        foreach (BuildSpec::plan($blueprint) as $operation) { $map[$operation['id']] = $operation; }
+        foreach (BuildSpec::plan($blueprint) as $operation) {
+            $id = $operation['object']['identity'];
+            $map[$operation['id']] = ['id'=>$id,'type'=>$operation['adapter'],'state'=>'captured',
+                'fields'=>$operation['parameters']];
+        }
         ksort($map, SORT_STRING);
         return $map;
+    }
+
+    private static function revisionObjectMap(array $revision): array
+    {
+        if (($revision['captureKind'] ?? '') !== 'configuration_capture') {
+            return self::operationMap($revision['blueprint']);
+        }
+        $map = [];
+        foreach ($revision['configurationCapture']['collections'] as $collectionName => $collection) {
+            foreach ($collection['objects'] ?? [] as $object) {
+                $map[self::captureObjectId($collectionName, $object['id'])] = [
+                    'id'=>$object['id'],'type'=>$object['type'],'state'=>$object['state'],'fields'=>$object['fields']];
+            }
+        }
+        ksort($map, SORT_STRING);
+        return $map;
+    }
+
+    private static function captureObjectId(string $collectionName, string $objectId): string
+    {
+        $prefix = match ($collectionName) {
+            'core.users' => 'user',
+            'core.pjsip' => 'pjsip',
+            'ringgroups' => 'ringgroup',
+            default => $collectionName,
+        };
+        return $prefix . ':' . $objectId;
     }
 }

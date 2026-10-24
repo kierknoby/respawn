@@ -1,5 +1,32 @@
 # Local Validation Results
 
+## Populated Configuration Protection (Operator-Confirmed, 24 October 2026)
+
+The operator confirmed Respawn 0.1.0 capture on FreePBX 17 / Asterisk 22 /
+Debian 12 of two Core users, two PJSIP devices and one Ring Group, with no
+configuration blocking gaps. Authenticated HTTPS publication to a separately
+hosted Debian 13 Pond, immediate read-back and subsequent independent
+verification matched revision identifiers, content hashes and retention receipts.
+Empty configuration collections had also passed earlier live testing.
+
+The final revision reports `configurationComplete: true`,
+`retentionState: independently_readback_verified`, `credentialStatus: not_configured`
+and `recoveryReady: false`. This confirms configuration protection without a
+credential manifest. It does not establish executable Revert, Regenerate,
+replacement reconstruction, independent credential recovery, registration, calls,
+audio, host-scheduled protection, a recovery duration or production readiness.
+This is operator-provided evidence, not independently reproduced in this workspace.
+No private identities, network addresses, secrets or revision payloads are published.
+
+The website now distinguishes that evidence from synthetic tests and planned
+recovery. Local extracted-ZIP browser checks pass for all eleven pages plus 404
+at 1440px, 390px and 320px widths: 36 page/viewport checks, navigation, local
+fragments, assets, keyboard menu/skip links, every FAQ and exact approved editorial
+text. Screenshots and the validation report are ignored local artefacts. Chromium
+uses locally extracted dependencies beneath `build/`; no host or live PBX was
+modified for the browser checks. Historical results below retain their original
+dates and limitations.
+
 ## Diagnostic Rotation CI Correction (23 October 2026)
 
 The failed `Respawn Scaffold Checks` run for commit `ebb8bb6` used Ubuntu 24.04
@@ -160,7 +187,7 @@ Protection tests pass for returned publication-failure diagnostics, preserved
 protected head, FIFO/backoff/restart, recovery timestamps, no heartbeat refresh
 on status reads, missed scheduler state and three-archive private log rotation.
 Existing application/provider, 41 reconstruction invariants, revisions,
-federation, schema/hash, local Pond, module/Pond/site package, extracted static
+federation, schema/hash, Development Pond, module/Pond/site package, extracted static
 links/assets and synthetic demo checks remain enabled and pass.
 
 Read-only Pond/recovery preflights pass locally: PHP 8.3.33, OpenSSL 3.0.20,
@@ -235,7 +262,7 @@ synthetic ledger tests. The caller-supplied peer identity is not cryptographic
 authentication; no River transport, mTLS/signatures, encryption, key rotation,
 production Lake or cross-Pond activation fencing is implemented.
 
-The Local Pond retain/retrieve RPC test uses authenticated loopback HTTP and
+The Development Pond retain/retrieve RPC test uses authenticated loopback HTTP and
 synthetic bearer credentials. It is Development Pond evidence, not external
 retention. No live provider, Pond, River peer, Lake, FreePBX or Asterisk was
 contacted or tested.
@@ -250,7 +277,7 @@ contacted.
 `sh tools/check.sh` and `XDEBUG_MODE=off php tools/demo.php` completed
 successfully. The gate passed PHP lint; application/provider (97 checks),
 preflight, native-shaped reconstruction, build-chain (41 invariants), corrective,
-revision and protection suites; the authenticated Local Pond retention/retrieval
+revision and protection suites; the authenticated Development Pond retention/retrieval
 contract; measurement input checks; independent schema/hash validation; site
 build; module/site package checks; extracted-package static links/assets; and
 `git diff --check`. Protection tests cover unchanged suppression, supported
@@ -258,19 +285,19 @@ extension/PJSIP/credential-reference changes, A-to-B-to-A revisions, FIFO outage
 crash/idempotency retry, provider changes, source-store deletion, and missing
 retention repair. These use synthetic stores/providers only. HTTPS retention and
 credential-vault tests use injected transport and reject simulated evidence. The
-Local Pond contract test uses separate loopback controller state and reports
+Development Pond contract test uses separate loopback controller state and reports
 simulated storage. No host cron was installed; no real FreePBX, controller or
 vault was available. The demo remains synthetic.
 
 The module tarball contains exactly module source and its licence; the site ZIP
-contains no module PHP or Local Pond implementation. This verifies package
+contains no module PHP or Development Pond implementation. This verifies package
 construction and exclusions, not FreePBX installation or activation.
 
 Playwright Chromium could not start because `libatk-1.0.so.0` is missing. The
 repository's ignored browser-library bundle is absent, and this audit did not
 install system packages or contact external services to obtain it. Static site
 generation and local package links/assets passed. Desktop/mobile rendering,
-keyboard interaction, browser-driven Local Pond and visual screenshot checks
+keyboard interaction, browser-driven Development Pond and visual screenshot checks
 remain unverified for this audit.
 
 ## Correction Pass (23 October 2026)
@@ -290,9 +317,9 @@ separate simulated targets. This is not native FreePBX or live provider evidence
 The browser tests did not run: Playwright Chromium was downloaded, but its process
 could not start because this container lacks `libatk-1.0.so.0`; the documented
 ignored `build/browser-deps/` bundle is absent. Static link/asset validation still
-ran. The Local Pond browser integration was also skipped because Chromium was not
+ran. The Development Pond browser integration was also skipped because Chromium was not
 launchable. Desktop/mobile rendering, keyboard interactions and browser-driven
-Local Pond behavior therefore remain unverified in this pass. No FreePBX,
+Development Pond behavior therefore remains unverified in this pass. No FreePBX,
 Asterisk, provider, SBC or live call/audio test was performed.
 
 ## Historical Record (22 October 2026)
@@ -319,11 +346,11 @@ focused corrective provider/diagnostic/canonicalization cases, the v1 preflight
 red/green regression, native-shaped Core/PJSIP/Ringgroups continuity,
 partial-write/output-containment contracts, 40 v2 executor/secret invariants,
 independent Draft 2020-12 schema validation and timing-input phase rules.
-The complete gate was rerun successfully: all module, test, tool and Local Pond PHP
+The complete gate was rerun successfully: all module, test, tool and Development Pond PHP
 syntax; JavaScript and lifecycle-script checks; module XML and schema JSON; ten-page
 static build; module/cPanel archive root/metadata/licence/wrapper/exclusion checks;
 22 extracted-package Chromium page/viewport checks; Apache 404 directive packaging;
-real Local Pond loopback-process integration; and `git diff --check` all passed.
+real Development Pond loopback-process integration; and `git diff --check` all passed.
 VS Code reported no diagnostics.
 PHP 8.2 is not installed in this container; compatibility was exercised only on
 PHP 8.4.15. The demonstration
@@ -384,9 +411,9 @@ LD_LIBRARY_PATH="$PWD/build/browser-deps/root/usr/lib/x86_64-linux-gnu${LD_LIBRA
 On another host, supply standard Playwright OS dependencies through your approved
 administration process. The website itself needs none of these development tools.
 
-## Local Pond Evidence
+## Development Pond Evidence
 
-`tests/local-pond.py` starts isolated PHP Local Pond/dashboard/worker processes on
+`tests/local-pond.py` starts isolated PHP Development Pond/dashboard/worker processes on
 random loopback ports, sends actual authenticated v2 HTTP requests, drives Chromium
 through export, publication, reconstruction, activation, probe and teardown, and
 then verifies duplicate submission, two-PBX isolation, connection change,
@@ -398,12 +425,12 @@ desktop.png` and `artifacts/screenshots/local-pond-active-mobile.png`.
 
 The local service performs real application/provider/executor/state work. The
 replacement target, apply adapter, connectivity, routing, readiness and fallback
-probe are explicitly simulated. Activation changes only the Local Pond routing
+probe are explicitly simulated. Activation changes only the Development Pond routing
 model; the probe reads actual simulated target Ring Groups and labels the assumed
 primary no-answer. It is not SIP, a live call/audio test, production readiness or
-provider compatibility. Production HTTPS rejects Local Pond's development markers.
+provider compatibility. Production HTTPS rejects Development Pond's development markers.
 Both packages were rebuilt and inspected; runtime credentials/state and the entire
-Local Pond implementation are excluded.
+Development Pond implementation are excluded.
 
 ## Explicitly Unverified
 

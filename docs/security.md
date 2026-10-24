@@ -40,15 +40,17 @@ Actual child-process interruption/restart is tested; hardware/filesystem power-l
 guarantees remain unverified. Corrupt
 state stops processing without overwriting evidence. Preserve it securely for review.
 
-No production secret was used in this work. Protected-file credential retrieval
-and HTTPS transport are implemented, but actual TLS/network behaviour is unverified.
+No production secret was used in local tests. Protected-file credential retrieval
+and HTTPS transport are implemented. The operator confirmed populated non-secret
+capture retention over separate-host authenticated HTTPS on 24 October 2026.
+This is working-path evidence, not a production audit or live credential recovery.
 The standalone Pond encrypts retained credentials using OpenSSL AES-256-GCM,
 random nonces and tenant/PBX/reference-bound associated data. Its private key is
 held on the independent Pond; a separately controlled offline backup is required.
 Recovery-only scoped tokens are distinct from source publication tokens. Replay
 IDs, request freshness, immutable references and local revocation are implemented.
 Loopback tests cover source loss, exact recovered values, wrong keys, ciphertext
-tampering, tenant/PBX rejection and log hygiene. Public TLS deployment, power-loss
+tampering, tenant/PBX rejection and log hygiene. Power-loss
 durability, automated master-key rotation and production security assurance are
 not established. See [Pond operations](../pond/README.md). Raw upstream exception bodies are not printed
 in the GUI or FreePBX CLI. Stable code/stage/outcome/retryability/correlation fields
@@ -73,6 +75,13 @@ recovery. Standalone Pond enforces reference immutability and explicitly enrolle
 credential access. An optional `activeReferences` map selects the current reference
 by extension number; old references remain resolvable for queued revisions.
 Unknown/cross-extension active references fail rather than choosing a password.
+
+Capture-only snapshots exclude recognised credential fields, including
+`secret`, `secret_origional`, `md5_cred` and SQL/AMPUSER passwords before hashing,
+revision storage and publication. Unknown fields remain unsupported rather than
+being exported. Missing credentials do not make supported non-secret configuration
+incomplete, but capture-only recovery readiness is always false. The live milestone
+retained configuration only; it did not establish independently recoverable secrets.
 
 `FileSecrets` validates absolute canonical paths, regular-file type, final-file
 permissions, size and content format; it rejects symlinked paths and

@@ -10,6 +10,7 @@ import sys
 import hashlib
 import tempfile
 import time
+import xml.etree.ElementTree as ET
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import HTTPCookieProcessor, Request, build_opener
@@ -17,6 +18,7 @@ from urllib.request import HTTPCookieProcessor, Request, build_opener
 from playwright.sync_api import sync_playwright
 
 ROOT = Path(__file__).resolve().parents[1]
+VERSION = ET.parse(ROOT / 'module/module.xml').getroot().findtext('version')
 LOCAL = ROOT / 'development/local-pond'
 ARTIFACTS = ROOT / 'artifacts/screenshots'
 
@@ -107,7 +109,7 @@ class Demo:
             self.http.open(request, timeout=5)
         except HTTPError as error:
             return error.code, json.loads(error.read())
-        raise AssertionError('invalid Local Pond RPC request was accepted')
+        raise AssertionError('invalid Development Pond RPC request was accepted')
 
 
 def wait_dashboard(demo, timeout=10):
@@ -159,7 +161,7 @@ def verify_loopback_contract(demo):
     assert retained['ack']['hash'] == blueprint['contentHash'] and retained['ack']['mode'] == 'SIMULATED'
     recovered = demo.rpc('retrieveRevision', 'pbx-alpha', 'primary', {'pbxId': 'pbx-alpha', 'revisionId': revision_id})
     assert recovered['blueprint'] == blueprint and recovered['publicationId'] == retained['ack']['publicationId']
-    print('PASS: authenticated Local Pond retain/retrieve returns the exact revision (SIMULATED; not external storage)')
+    print('PASS: authenticated Development Pond retain/retrieve returns the exact revision (SIMULATED; not external storage)')
     print('PASS: loopback-only configuration, bearer enrolment, endpoint-bound connection ID and strict v2 parameters')
 
 
@@ -230,7 +232,7 @@ def browser_happy_path(demo):
                 + '$b = $s->exportBlueprint(); echo $b["contentHash"]; } catch (Throwable $e) { fwrite(STDERR, $e->getMessage()); exit(1); }')
             probe = subprocess.run(['php','-r',code], cwd=ROOT, env=dict(os.environ, RESPAWN_LOCAL_DEMO_ROOT=str(demo.root)), capture_output=True)
             assert False, f'{page.locator("#alert").inner_text()}; local source export probe={probe.stderr.decode(errors="replace")}'
-        page.get_by_role('button', name='Publish to Local Pond').click()
+        page.get_by_role('button', name='Publish to Development Pond').click()
         page.wait_for_function("document.querySelector('#publication').textContent.includes('Accepted version')")
         page.get_by_role('button', name=re.compile('Respawn selected source')).click()
         try:
@@ -432,7 +434,7 @@ def main():
         assert recovered['development']['reconstruction']['state'] == 'configuration_verified'
         assert len(recovered['development']['dependencyOrder']) == 6
         demo.action('teardown', 'pbx-alpha', 'alternate', operationId=interrupted_id)
-        print('PASS: Local Pond/worker restart recovers interrupted reconstruction without duplicate objects')
+        print('PASS: Development Pond/worker restart recovers interrupted reconstruction without duplicate objects')
 
         stop(env)
         unrelated = root / 'operator-note.txt'
@@ -450,11 +452,11 @@ def main():
         # Verify every generated credential is absent from distribution packages.
         secret_values = [path.read_text().strip() for path in (root / 'credentials').glob('*.token')]
         secret_values += [path.read_text().strip() for path in (root / 'credentials/source-secrets').glob('*.secret')]
-        for archive_path in [ROOT / 'artifacts/respawn-0.0.1.tgz', ROOT / 'artifacts/respawn-site-0.0.1.zip']:
+        for archive_path in [ROOT / 'artifacts' / f'respawn-{VERSION}.tgz', ROOT / 'artifacts' / f'respawn-site-{VERSION}.zip']:
             raw = archive_path.read_bytes()
             assert all(value.encode() not in raw for value in secret_values)
             assert b'LocalPondProvider.php' not in raw and b'development/local-pond' not in raw
-        print('PASS: generated credentials and Local Pond implementation are excluded from both packages')
+        print('PASS: generated credentials and Development Pond implementation are excluded from both packages')
         print('PASS: screenshots: artifacts/screenshots/local-pond-active-{desktop,mobile}.png')
     finally:
         stop(env)
