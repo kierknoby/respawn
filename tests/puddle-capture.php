@@ -36,9 +36,13 @@ final class PuddleTestModules
 
 final class PuddleTestManager
 {
+    public function __construct(private array $overrides = []) {}
     public function connected(): bool { return true; }
     public function database_get(string $family, string $key): string
     {
+        if (array_key_exists($family . '/' . $key, $this->overrides)) {
+            return $this->overrides[$family . '/' . $key];
+        }
         [$number,$item] = array_pad(explode('/', $key, 2), 2, '');
         if ($family === 'CW') { return 'ENABLED'; }
         if ($family === 'AMPUSER') { return (string) (NativeProfile::userAst($number, 'Test ' . $number)[$item] ?? ''); }
@@ -171,17 +175,144 @@ try {
     $restartStore = new RevisionStore(new JsonStateStore($root . '/revisions'));
     puddleCheck($restartStore->get('pbx-puddle',$first['revisionId'])['captureKind'] === 'configuration_capture',
         'Puddle capture revision survives a new store instance and validates its integrity hash');
-    $user = $capture['collections']['core.users']['objects'][0];
-    $device = $capture['collections']['core.pjsip']['objects'][0];
+    [$guiPbx,$guiSecret] = puddleFixture($root, ['7290'=>['7201','7202']], ['7201','7202']);
+    $guiPbx->Database->exec("ALTER TABLE users ADD COLUMN mohclass TEXT;
+        UPDATE users SET mohclass = 'synthetic-music-class';
+        UPDATE devices SET hint_override = 'synthetic-hint';
+        UPDATE sip SET data = 'yes' WHERE keyword = 'aggregate_mwi';
+        DELETE FROM sip WHERE keyword IN ('force_callerid','mailbox','vmexten','webrtc','username');");
+    $guiPbx->astman = new PuddleTestManager(['AMPUSER/7201/concurrency_limit'=>'3',
+        'AMPUSER/7202/concurrency_limit'=>'3']);
+    $guiPbx->Ringgroups->rows['7290']['elsewhere'] = 'synthetic-elsewhere';
+    $guiCapture = (new FreePbxConfigurationCollector($guiPbx,'pbx-puddle'))->capture();
+    $guiRevision = $store->captureConfiguration($guiCapture);
+    puddleCheck($guiRevision['managedScope']['complete'] === true
+        && $guiCapture['blockingGaps'] === [] && $guiCapture['credentials']['state'] === 'not_configured'
+        && $guiCapture['credentials']['recoveryReady'] === false,
+        'observed FreePBX 17 GUI field differences capture all five objects without a credential manifest; concealed values are synthetic');
+    $guiUsers = $guiCapture['collections']['core.users']['objects'];
+    $guiDevices = $guiCapture['collections']['core.pjsip']['objects'];
+    $guiGroup = $guiCapture['collections']['ringgroups']['objects'][0];
+    $expectedGroup = $guiPbx->Ringgroups->rows['7290'];
+    ksort($expectedGroup,SORT_STRING);
+    puddleCheck(array_column($guiUsers,'id') === ['7201','7202']
+        && array_column($guiDevices,'id') === ['7201','7202'] && $guiGroup['id'] === '7290'
+        && $guiGroup['fields'] === $expectedGroup
+        && $guiGroup['fields']['grplist'] === '7201-7202',
+        'all five identities and exact Ring Group settings/member relationships are retained without destination rewriting');
+    foreach ($guiUsers as $guiUser) {
+        $userQuery = $guiPbx->Database->prepare('SELECT * FROM users WHERE extension = ?');
+        $userQuery->execute([$guiUser['id']]);
+        $expectedUserRow = $userQuery->fetch(PDO::FETCH_ASSOC);
+        unset($expectedUserRow['password']);
+        ksort($expectedUserRow,SORT_STRING);
+        puddleCheck($guiUser['fields']['row'] === $expectedUserRow
+            && $guiUser['fields']['row']['mohclass'] === 'synthetic-music-class'
+            && $guiUser['fields']['ast']['concurrency_limit'] === '3',
+            'user ' . $guiUser['id'] . ' retains actual non-secret SQL and AMPUSER settings, including mohclass and concurrency_limit');
+    }
+    foreach ($guiDevices as $guiDevice) {
+        $deviceFields = $guiDevice['fields'];
+        $settingsQuery = $guiPbx->Database->prepare('SELECT keyword, data FROM sip WHERE id = ?');
+        $settingsQuery->execute([$guiDevice['id']]);
+        $expectedSettings = $settingsQuery->fetchAll(PDO::FETCH_KEY_PAIR);
+        unset($expectedSettings['secret'],$expectedSettings['md5_cred']);
+        ksort($expectedSettings,SORT_STRING);
+        puddleCheck($deviceFields['settings'] === $expectedSettings
+            && $deviceFields['row']['hint_override'] === 'synthetic-hint'
+            && $deviceFields['row']['user'] === $guiDevice['id']
+            && $deviceFields['ast']['user'] === $guiDevice['id']
+            && $deviceFields['settings']['aggregate_mwi'] === 'yes'
+            && $deviceFields['settings']['max_contacts'] === '1'
+            && !array_intersect(['force_callerid','mailbox','vmexten','webrtc','username'], array_keys($deviceFields['settings']))
+            && !array_key_exists('authUsername',$deviceFields),
+            'device ' . $guiDevice['id'] . ' retains exact settings and relationships, without invented optional values or username');
+    }
+    $guiPbx->Database->exec("UPDATE users SET password = 'synthetic-user-password';
+        UPDATE sip SET data = 'synthetic-md5-material' WHERE keyword = 'md5_cred';
+        UPDATE sip SET data = 'synthetic-rotated-sip-secret' WHERE keyword = 'secret';");
+    $guiPbx->astman = new PuddleTestManager(['AMPUSER/7201/concurrency_limit'=>'3',
+        'AMPUSER/7202/concurrency_limit'=>'3','AMPUSER/7201/password'=>'synthetic-ampuser-password']);
+    $secretOnlyChange = (new FreePbxConfigurationCollector($guiPbx,'pbx-puddle'))->capture();
+    puddleCheck($secretOnlyChange['contentHash'] === $guiCapture['contentHash']
+        && !str_contains(json_encode($secretOnlyChange),$guiSecret)
+        && !str_contains(json_encode($secretOnlyChange),'synthetic-user-password')
+        && !str_contains(json_encode($secretOnlyChange),'synthetic-md5-material')
+        && !str_contains(json_encode($secretOnlyChange),'synthetic-rotated-sip-secret')
+        && !str_contains(json_encode($secretOnlyChange),'synthetic-ampuser-password'),
+        'SQL/AMPUSER passwords and SIP secret/md5 material are excluded and secret-only changes do not affect non-secret hashes');
+    $guiRestartStore = new RevisionStore(new JsonStateStore($root . '/revisions'));
+    puddleCheck($guiRestartStore->captureConfiguration($secretOnlyChange)['revisionId'] === $guiRevision['revisionId']
+        && $guiRestartStore->get('pbx-puddle',$guiRevision['revisionId'])['configurationCapture'] === $guiCapture,
+        'populated source-shaped capture survives restart and deduplicates without changing its canonical representation');
+    $previousGuiRevision = $guiRevision;
+    foreach ([
+        ['core.users','7201',static fn () => $guiPbx->Database->exec("UPDATE users SET mohclass = 'synthetic-other-class' WHERE extension = '7201'")],
+        ['core.pjsip','7201',static fn () => $guiPbx->Database->exec("UPDATE devices SET hint_override = '' WHERE id = '7201'")],
+        ['core.pjsip','7201',static fn () => $guiPbx->Database->exec("UPDATE sip SET data = 'no' WHERE id = '7201' AND keyword = 'aggregate_mwi'")],
+        ['ringgroups','7290',static function () use ($guiPbx): void { $guiPbx->Ringgroups->rows['7290']['elsewhere'] = ''; }],
+    ] as [$collectionName,$objectNumber,$mutate]) {
+        $mutate();
+        $changedGuiCapture = (new FreePbxConfigurationCollector($guiPbx,'pbx-puddle'))->capture();
+        $changedGuiRevision = $guiRestartStore->captureConfiguration($changedGuiCapture);
+        $guiDiff = $guiRestartStore->compare('pbx-puddle',$previousGuiRevision['revisionId'],$changedGuiRevision['revisionId']);
+        puddleCheck($changedGuiCapture['contentHash'] !== $previousGuiRevision['contentHash']
+            && $changedGuiRevision['parentRevisionId'] === $previousGuiRevision['revisionId']
+            && count($guiDiff['changes']['update']) === 1,
+            $collectionName . ':' . $objectNumber . ' non-default setting changes are hashed, versioned and compared');
+        $previousGuiRevision = $changedGuiRevision;
+    }
+    $nativeUserDenied = false;
+    try {
+        NativeProfile::userParameters((new \Respawn\Reconstruction\FreePbxSnapshot($guiPbx->Database,$guiPbx->astman))->read('user','7201'),'7201');
+    } catch (RuntimeException) { $nativeUserDenied = true; }
+    $guiPbx->Ringgroups->rows['7290']['elsewhere'] = 'synthetic-elsewhere';
+    $nativeGroupDenied = false;
+    try { (new \Respawn\Reconstruction\FreePbxRinggroups($guiPbx->Ringgroups,'pbx-puddle',static fn (): bool => false))->read('7290'); }
+    catch (RuntimeException) { $nativeGroupDenied = true; }
+    $captureExecutionDenied = false;
+    try { $guiRestartStore->operationCatalogForRevision('pbx-puddle',$guiRevision['revisionId']); }
+    catch (RuntimeException $exception) { $captureExecutionDenied = $exception->getMessage() === 'PUDDLE_CAPTURE_NOT_EXECUTABLE'; }
+    puddleCheck($nativeUserDenied && $nativeGroupDenied && $captureExecutionDenied,
+        'capture-compatible GUI differences do not broaden native reconstruction or make populated captures executable');
+    $guiPbx->Database->prepare('INSERT INTO sip VALUES (?,?,?)')->execute(['7201','auth_token','synthetic-do-not-retain-token']);
+    $unknownCapture = (new FreePbxConfigurationCollector($guiPbx,'pbx-puddle'))->capture();
+    puddleCheck($unknownCapture['collections']['core.pjsip']['objects'][0]['state'] === 'unsupported'
+        && !str_contains(json_encode($unknownCapture),'synthetic-do-not-retain-token'),
+        'unreviewed PJSIP fields remain unsupported and their values never enter captures');
+    $guiPbx->Database->exec("DELETE FROM sip WHERE keyword = 'auth_token';
+        UPDATE sip SET data = 'sip:synthetic-user:synthetic-uri-password@example.invalid' WHERE keyword = 'outbound_proxy';");
+    $uriCapture = (new FreePbxConfigurationCollector($guiPbx,'pbx-puddle'))->capture();
+    puddleCheck($uriCapture['collections']['core.pjsip']['objects'][0]['state'] === 'unsupported'
+        && !str_contains(json_encode($uriCapture),'synthetic-uri-password'),
+        'credential-bearing URI values are rejected rather than retained as ordinary text settings');
+    $guiPbx->Database->exec("UPDATE sip SET data = '' WHERE keyword = 'outbound_proxy';
+        UPDATE devices SET user = '9999' WHERE id = '7201';");
+    $relationshipCapture = (new FreePbxConfigurationCollector($guiPbx,'pbx-puddle'))->capture();
+    puddleCheck($relationshipCapture['collections']['core.pjsip']['objects'][0]['state'] === 'unsupported',
+        'inconsistent device relationships remain unsupported rather than being replaced with assumed bindings');
+    $guiPbx->Ringgroups->rows['7290']['elsewhere'] = ['unrepresentable'];
+    $invalidGroupCapture = (new FreePbxConfigurationCollector($guiPbx,'pbx-puddle'))->capture();
+    puddleCheck($invalidGroupCapture['collections']['ringgroups']['objects'][0]['state'] === 'unsupported',
+        'non-scalar Ring Group configuration remains explicitly unrepresentable');
+    $guiPbx->Database->exec('ALTER TABLE users ADD COLUMN unreviewed_setting TEXT');
+    $unknownUserCapture = (new FreePbxConfigurationCollector($guiPbx,'pbx-puddle'))->capture();
+    puddleCheck($unknownUserCapture['collections']['core.users']['objects'][0]['state'] === 'unsupported',
+        'unknown user columns are not silently discarded even when null');
     $v2Modules = [];
     foreach ($capture['modules'] as $name=>$module) { if (!empty($module['available']) && is_string($module['version'])) { $v2Modules[$name] = $module['version']; } }
     $legacyBlueprint = \Respawn\Reconstruction\BuildSpec::create('pbx-puddle',$v2Modules,
-        [$user['id']=>$user['fields']],[$device['id']=>$device['fields'] + ['secretRef'=>'secret:pbx-puddle:1001:v1']],[]);
+        ['1001'=>['name'=>'Test 1001','voicemail'=>'novm']],
+        ['1001'=>['user'=>'1001','description'=>'Test 1001','authUsername'=>'Test-1001',
+            'secretRef'=>'secret:pbx-puddle:1001:v1','settings'=>[
+                'context'=>'from-internal','transport'=>'','dtmfmode'=>'rfc4733','allow'=>'ulaw,alaw','disallow'=>'all',
+                'direct_media'=>'no','rtp_symmetric'=>'yes','force_rport'=>'yes','rewrite_contact'=>'yes',
+                'max_contacts'=>1,'remove_existing'=>'yes','media_encryption'=>'no']]],[]);
     $legacyRevision = $store->capture($legacyBlueprint);
     $mixedDiff = $store->compare('pbx-puddle',$first['revisionId'],$legacyRevision['revisionId']);
-    puddleCheck($mixedDiff['changes'] === ['create'=>[],'update'=>[],'remove'=>[],'unchanged'=>['pjsip:1001','user:1001']]
+    puddleCheck($mixedDiff['changes'] === ['create'=>[],'update'=>['pjsip:1001','user:1001'],'remove'=>[],'unchanged'=>[]]
         && $mixedDiff['captureMetadataChanged'] === true,
-        'mixed local-capture/v2 history compares object fields compatibly while reporting credential/module metadata separately');
+        'richer capture/v2 comparison preserves identities and reports source-field differences without rewriting old revisions');
 
     [$oneGroupPbx] = puddleFixture($root, ['600'=>['1001']]);
     $oneGroup = (new FreePbxConfigurationCollector($oneGroupPbx,'pbx-puddle'))->capture();
@@ -274,7 +405,7 @@ try {
         'successful capture after temporary failure creates a complete child without rewriting previous history');
 
     $changedGroups = $capture['collections'];
-    $changedGroups['core.users']['objects'][0]['fields']['name'] = 'Test 1001 Changed';
+    $changedGroups['core.users']['objects'][0]['fields']['row']['name'] = 'Test 1001 Changed';
     $changedCapture = ConfigurationCapture::create($capture['sourcePbxId'],$capture['modules'],$changedGroups,
         $capture['credentials'],$capture['blockingGaps']);
     $changedRevision = $store->captureConfiguration($changedCapture);

@@ -8,6 +8,25 @@ use Throwable;
 
 final class FreePbxConfigurationCollector
 {
+    private const USER_FIELDS = ['extension','name','voicemail','ringtimer','noanswer','recording','outboundcid',
+        'sipname','noanswer_cid','busy_cid','chanunavail_cid','noanswer_dest','busy_dest','chanunavail_dest','mohclass'];
+    private const USER_AST_FIELDS = ['cidname','cidnum','device','voicemail','ringtimer','cfringtimer',
+        'concurrency_limit','noanswer','outboundcid','accountcode','recording/in/external','recording/out/external',
+        'recording/in/internal','recording/out/internal','recording/ondemand','recording/priority','screen','pinless',
+        'answermode','intercom','rvolume','cwtone','dialopts'];
+    private const DEVICE_FIELDS = ['id','tech','dial','devicetype','user','description','emergency_cid','hint_override'];
+    private const DEVICE_AST_FIELDS = ['user','tech','dial','type','default_user'];
+    private const PJSIP_FIELDS = ['sipdriver','account','dial','callerid','mailbox','trustrpid','sendrpid','qualifyfreq',
+        'avpf','timers','icesupport','send_connected_line','user_eq_phone','namedcallgroup','namedpickupgroup',
+        'accountcode','media_use_received_transport','media_address','mwi_subscription','aggregate_mwi',
+        'media_encryption_optimistic','device_state_busy_at','rtcp_mux','bundle','minimum_expiration',
+        'maximum_expiration','match','rtp_timeout','rtp_timeout_hold','timers_min_se','force_callerid',
+        'max_audio_streams','max_video_streams','webrtc','defaultuser','message_context','refer_blind_progress',
+        'vmexten','outbound_auth','outbound_proxy','context','transport','dtmfmode','allow','disallow','direct_media',
+        'rtp_symmetric','force_rport','rewrite_contact','max_contacts','remove_existing','media_encryption','username'];
+    private const GROUP_FIELDS = ['grpnum','description','strategy','grptime','grplist','postdest','grppre',
+        'annmsg_id','alertinfo','needsconf','remotealert_id','toolate_id','ringing','cwignore','cfignore','cpickup',
+        'recording','progress','elsewhere','rvolume','changecid','fixedcid'];
     private array $deviceStates = [];
     private bool $deviceDiscoverySucceeded = false;
     private array $additionalModules;
@@ -22,6 +41,8 @@ final class FreePbxConfigurationCollector
 
     public function capture(): array
     {
+        $this->deviceStates = [];
+        $this->deviceDiscoverySucceeded = false;
         $providers = [
             'core.users' => ['modules'=>['core'], 'collect'=>fn (): array => $this->collectUsers()],
             'core.pjsip' => ['modules'=>['core','sipsettings'], 'collect'=>fn (): array => $this->collectDevices()],
@@ -113,7 +134,14 @@ final class FreePbxConfigurationCollector
         $objects = [];
         foreach ($this->userNumbers() as $number) {
             try {
-                $fields = NativeProfile::userParameters($snapshot->read('user', $number), $number);
+                $user = $snapshot->read('user', $number);
+                if (!is_array($user['row'] ?? null) || (string) ($user['row']['extension'] ?? '') !== $number) {
+                    throw new RuntimeException('USER_CAPTURE_IDENTITY_INVALID');
+                }
+                $fields = ['row'=>$this->captureFields($user['row'], self::USER_FIELDS, ['password'],
+                    ['extension','name','voicemail']),
+                    'ast'=>$this->captureFields($user['ast'], self::USER_AST_FIELDS, ['password']),
+                    'callwaiting'=>$user['callwaiting']];
                 $objects[] = ['id'=>$number,'type'=>'core.user.v1','state'=>'captured','fields'=>$fields];
             } catch (Throwable $exception) {
                 $objects[] = ['id'=>$number,'type'=>'core.user.v1','state'=>'unsupported',
@@ -156,38 +184,19 @@ final class FreePbxConfigurationCollector
     {
         $row = $snapshot['row'] ?? null;
         if (!is_array($row)) { throw new RuntimeException('PJSIP_DEVICE_ROW_MISSING'); }
-        if (($row['tech'] ?? '') !== 'pjsip' || ($row['devicetype'] ?? '') !== 'fixed'
-            || (string) ($row['user'] ?? '') !== $number || ($row['dial'] ?? '') !== 'PJSIP/' . $number
-            || (string) ($row['emergency_cid'] ?? '') !== '' || (string) ($row['hint_override'] ?? '') !== '') {
+        if ((string) ($row['id'] ?? '') !== $number || ($row['tech'] ?? '') !== 'pjsip'
+            || ($row['devicetype'] ?? '') !== 'fixed' || (string) ($row['user'] ?? '') !== $number
+            || ($row['dial'] ?? '') !== 'PJSIP/' . $number) {
             throw new RuntimeException('DEVICE_RELATIONSHIP_UNSUPPORTED');
-        }
-        if (array_diff(array_keys($row), ['id','tech','dial','devicetype','user','description','emergency_cid','hint_override'])) {
-            throw new RuntimeException('DEVICE_METADATA_UNSUPPORTED');
         }
         foreach (['user'=>$number,'tech'=>'pjsip','dial'=>'PJSIP/' . $number,'type'=>'fixed','default_user'=>$number] as $key=>$expected) {
             if (($snapshot['ast'][$key] ?? '') !== $expected) { throw new RuntimeException('DEVICE_AST_STATE_INCOMPLETE'); }
         }
-        $settings = $snapshot['settings'] ?? [];
-        $description = (string) ($row['description'] ?? '');
-        $fixed = NativeProfile::deviceFixed($number, $description);
-        foreach ($fixed as $key=>$expected) {
-            if ((string) ($settings[$key] ?? '') !== $expected) { throw new RuntimeException('PJSIP_PROFILE_UNSUPPORTED'); }
-        }
-        $selected = [];
-        foreach (['context','transport','dtmfmode','allow','disallow','direct_media','rtp_symmetric','force_rport',
-            'rewrite_contact','max_contacts','remove_existing','media_encryption'] as $key) {
-            if (!array_key_exists($key, $settings)) { throw new RuntimeException('PJSIP_FIELD_MISSING'); }
-            $selected[$key] = $key === 'max_contacts' ? (int) $settings[$key] : (string) $settings[$key];
-        }
-        if (array_diff(array_keys($settings), array_merge(array_keys($fixed), array_keys($selected), ['secret','username']))) {
-            throw new RuntimeException('PJSIP_UNKNOWN_FIELD');
-        }
-        BuildSpec::settings($selected);
-        $authUsername = $settings['username'] ?? $settings['account'] ?? null;
-        if (!is_string($authUsername) || !preg_match('/^[a-zA-Z0-9._-]{1,80}$/D', $authUsername)) {
-            throw new RuntimeException('PJSIP_AUTH_IDENTITY_UNSUPPORTED');
-        }
-        return ['user'=>$number,'description'=>$description,'authUsername'=>$authUsername,'settings'=>$selected];
+        return ['row'=>$this->captureFields($row, self::DEVICE_FIELDS, [],
+                ['id','tech','dial','devicetype','user','description']),
+            'settings'=>$this->captureFields($snapshot['settings'] ?? [], self::PJSIP_FIELDS,
+                ['secret','md5_cred'], ['sipdriver','account','dial','context']),
+            'ast'=>$this->captureFields($snapshot['ast'], self::DEVICE_AST_FIELDS)];
     }
 
     private function collectGroups(): array
@@ -197,16 +206,17 @@ final class FreePbxConfigurationCollector
         if (!$statement) { throw new RuntimeException('PUDDLE_RINGGROUP_DISCOVERY_FAILED'); }
         $numbers = $statement->fetchAll(PDO::FETCH_COLUMN);
         if (!is_array($numbers)) { throw new RuntimeException('PUDDLE_RINGGROUP_DISCOVERY_FAILED'); }
-        $adapter = new FreePbxRinggroups($this->freePbx->Ringgroups, $this->sourcePbxId,
-            static fn (string $number): bool => false);
         $objects = [];
         foreach ($numbers as $rawNumber) {
             $number = (string) $rawNumber;
             if (!preg_match('/^[0-9]{2,8}$/D', $number)) { throw new RuntimeException('PUDDLE_RINGGROUP_IDENTITY_INVALID'); }
             try {
-                $group = $adapter->read($number);
-                if ($group === null) { throw new RuntimeException('SOURCE_GROUP_READBACK_MISSING'); }
-                unset($group['number']);
+                $group = $this->freePbx->Ringgroups->get($number);
+                if (!is_array($group) || (string) ($group['grpnum'] ?? '') !== $number) {
+                    throw new RuntimeException('SOURCE_GROUP_READBACK_MISSING');
+                }
+                $group = $this->captureFields($group, self::GROUP_FIELDS, [],
+                    ['grpnum','description','strategy','grptime','grplist','postdest']);
                 $objects[] = ['id'=>$number,'type'=>'ringgroups.v1','state'=>'captured','fields'=>$group];
             } catch (Throwable $exception) {
                 $objects[] = ['id'=>$number,'type'=>'ringgroups.v1','state'=>'unsupported',
@@ -214,6 +224,26 @@ final class FreePbxConfigurationCollector
             }
         }
         return $objects;
+    }
+
+    private function captureFields(array $source, array $allowed, array $secrets = [], array $required = []): array
+    {
+        if (array_diff(array_keys($source), array_merge($allowed, $secrets))) {
+            throw new RuntimeException('PUDDLE_CAPTURE_UNKNOWN_FIELD');
+        }
+        if (array_diff($required, array_keys($source))) { throw new RuntimeException('PUDDLE_CAPTURE_FIELD_MISSING'); }
+        $fields = array_intersect_key($source, array_fill_keys($allowed, true));
+        foreach ($fields as $value) {
+            if (!(is_string($value) || is_bool($value) || $value === null
+                || (is_int($value) && abs($value) <= 9007199254740991))) {
+                throw new RuntimeException('PUDDLE_CAPTURE_VALUE_UNSUPPORTED');
+            }
+            if (is_string($value) && preg_match('~(?:[a-z][a-z0-9+.-]*://|sips?:)[^\s/@]*:[^\s/@]*@~i', $value)) {
+                throw new RuntimeException('PUDDLE_CAPTURE_SECRET_URI_UNSUPPORTED');
+            }
+        }
+        json_encode($fields, JSON_THROW_ON_ERROR);
+        return $fields;
     }
 
     private function credentialStatus(): array

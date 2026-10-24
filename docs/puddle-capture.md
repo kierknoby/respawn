@@ -25,6 +25,31 @@ does not write FreePBX tables, create artificial objects, run Apply Config or
 reload Asterisk. Unsupported or inconsistent objects are described by stable
 reason codes; secret fields are never copied into a capture.
 
+Capture compatibility is not reconstruction compatibility. Core user fields now
+retain allowlisted SQL row values (including `mohclass`), non-secret AMPUSER
+values (including `concurrency_limit`) and call-waiting state. PJSIP fields retain
+allowlisted device row values, actual SIP settings and DEVICE relationships.
+Ring Groups retain allowlisted `get()` fields, including the original member list
+and destination. Settings are not translated to reconstruction defaults or cast
+to different scalar types. Optional missing PJSIP keys remain absent, including
+`force_callerid`, `mailbox`, `vmexten`, `webrtc` and `username`; no authentication
+username is inferred. Non-default `hint_override`, `aggregate_mwi` and `elsewhere`
+values are retained when safely representable.
+
+Only reviewed non-secret fields are accepted. Unknown fields, nested/non-scalar
+values, credential-bearing URIs, missing required identity/profile fields and
+inconsistent fixed-device bindings remain unsupported. SQL/AMPUSER passwords,
+SIP secrets and `md5_cred` never enter snapshots. This is the supported discovery
+scope, not an inventory of every AMPUSER key or every FreePBX module. Capture
+does not assess or certify executable reconstruction compatibility; all such
+revisions remain non-executable. The reconstruction validators are unchanged.
+
+The existing capture schema and canonical hashing algorithm are unchanged. New
+captures include more source state and therefore have different hashes from the
+earlier reduced representation. Existing retained snapshots and their hashes are
+not rewritten. A comparison with an earlier representation may report updated
+fields for the same object identities without indicating a source-side change.
+
 ## Credential Status
 
 Configuration discovery, credential verification and independent recovery
@@ -169,13 +194,114 @@ To roll back, restore the two backed-up files and restart the same PHP-FPM unit.
 Never run `init`, replace `pond.sqlite`, regenerate the key or change the
 deployed HTTPS service during this code-only update.
 
+## Existing 0.1.0 Capture Correction
+
+This correction needs no Pond update, enrolment change, secret manifest, module
+database migration or Asterisk reload. Keep the existing provider connection and
+revision journal. Do not enable protection or change routing for this test.
+
+The correction is currently an uncommitted local change on `0-1-0_Dev`.
+Downloading that branch from GitHub will not include it until separately
+authorised and published. Build from the reviewed corrected workspace instead:
+
+```sh
+test "$(git branch --show-current)" = 0-1-0_Dev
+sh tools/check.sh
+php tools/demo.php
+(cd artifacts && sha256sum -c SHA256SUMS)
+```
+
+Transfer `artifacts/respawn-0.1.0.tgz` and `artifacts/SHA256SUMS` through the
+approved administrative channel to `/root/respawn-capture-update/` on the
+development PBX. The version stays 0.1.0; use the checksum to identify the build.
+Validate it against the reviewed workspace value, not just an untrusted
+accompanying checksum file.
+
+Run the following as root in the development host's administrative console. It
+backs up and replaces only the two collector files in the already installed
+module, preserving their owner/group/mode. If the installed module path differs,
+set `MODULE` to its actual path. Stop on any failure. No uninstall, settings reset
+or deletion of revision storage is needed.
+
+```sh
+set -eu
+MODULE=/var/www/html/admin/modules/respawn
+UPDATE=/root/respawn-capture-update
+cd "$UPDATE"
+sha256sum -c --ignore-missing SHA256SUMS
+STAGE=$(mktemp -d "$UPDATE/extracted.XXXXXXXX")
+tar -xzf respawn-0.1.0.tgz -C "$STAGE"
+php -l "$STAGE/respawn/src/Reconstruction/FreePbxConfigurationCollector.php"
+php -l "$STAGE/respawn/src/Reconstruction/PuddleCollector.php"
+BACKUP=$(mktemp -d /root/respawn-capture-backup.XXXXXXXX)
+for FILE in FreePbxConfigurationCollector.php PuddleCollector.php; do
+	TARGET="$MODULE/src/Reconstruction/$FILE"
+	cp -a "$TARGET" "$BACKUP/$FILE"
+done
+for FILE in FreePbxConfigurationCollector.php PuddleCollector.php; do
+	TARGET="$MODULE/src/Reconstruction/$FILE"
+	install -o "$(stat -c %u "$TARGET")" -g "$(stat -c %g "$TARGET")" \
+		-m "$(stat -c %a "$TARGET")" "$STAGE/respawn/src/Reconstruction/$FILE" "$TARGET"
+	php -l "$TARGET"
+	cmp "$STAGE/respawn/src/Reconstruction/$FILE" "$TARGET"
+done
+printf 'Collector code backup: %s\n' "$BACKUP"
+```
+
+Each new `fwconsole` process loads the corrected CLI code. No PHP-FPM, Asterisk
+or other service restart is required for these CLI tests. Use the existing
+approved FreePBX CLI account:
+
+```sh
+fwconsole respawn revision-capture
+fwconsole respawn revision-list
+```
+
+Expect `configurationComplete: true`, `credentialStatus: not_configured` and
+`recoveryReady: false` without a manifest. The state can correctly be
+`configuration_captured_credentials_incomplete`: supported non-secret
+configuration is complete, but credentials are not recovery-ready. Copy the
+returned revision ID into the following commands:
+
+```sh
+REVISION_ID=rev_REPLACE_WITH_RETURNED_ID
+fwconsole respawn revision-show --revision-id="$REVISION_ID"
+fwconsole respawn revision-capture
+```
+
+Before publication, confirm the revision's `objects` include `user:7201`,
+`user:7202`, `pjsip:7201`, `pjsip:7202` and `ringgroup:7290`, and its
+`managedScope.complete` is true. Stop on an incomplete capture or missing object.
+With no supported source changes, the repeat capture must report unchanged with
+the same revision ID/hash. Do not recreate the test objects. Then run:
+
+```sh
+fwconsole respawn revision-publish --revision-id="$REVISION_ID"
+fwconsole respawn revision-verify --revision-id="$REVISION_ID"
+fwconsole respawn revision-show --revision-id="$REVISION_ID"
+```
+
+Publication must report `configuration_retained_and_readback_verified` and
+subsequent verification must confirm the same revision ID/content hash. The final
+revision shows `retentionState: independently_readback_verified`, with
+`recoveryReady: false`. Keep the output as populated live-test evidence. This
+demonstrates retained configuration, not executable reconstruction, credential
+recovery or live calls.
+
+If code rollback is needed, restore the two files from the printed `BACKUP`
+directory using `cp -a` to their original paths. Do not replace or delete the
+revision journal, provider credentials or Pond storage.
+
 ## GUI Compatibility Diagnostic
 
 The reported 7201/7202/7290 failure is traced to capture calling reconstruction
 validators (`NativeProfile::userParameters`, the fixed PJSIP profile and
-`FreePbxRinggroups::read`). Their exact live mismatches are not yet known. Those
-validators remain unchanged. Do not treat the credential-gap correction alone as
-the object-compatibility fix or upgrade for that purpose yet.
+`FreePbxRinggroups::read`). The operator has now confirmed non-default concurrency,
+`mohclass`, hint/MWI fields, optional absent PJSIP fields and `elsewhere` as the
+relevant differences. Concealed values have not been inferred. Capture no longer
+uses those reconstruction validators; the validators themselves remain unchanged.
+The following original diagnostic is retained for reference and can run without
+upgrading the installed 0.1.0 module.
 
 Run this single read-only command on the existing development PBX as the normal
 FreePBX administrative CLI account, using the currently installed 0.1.0 module.
@@ -273,12 +399,10 @@ try {
 PHP
 ```
 
-Return the diagnostic JSON before the field-compatibility patch is finalised.
-Values outside the safe enum/numeric sets remain redacted even for known fields;
-additional evidence may be needed for such mismatches. Regression fixtures must
-use synthetic identities/secrets with the observed field shapes and non-secret
-settings, not inferred GUI defaults. Existing synthetic profiles do not prove
-these five GUI-created objects are capture-compatible.
+Values outside the safe enum/numeric sets remain redacted even for known fields.
+The correction's regressions use the reported field presence/absence and known
+concurrency value, with explicit synthetic examples for concealed values. They
+do not claim to reproduce undisclosed values or prove the live populated round-trip.
 
 ## Evidence And Limits
 
@@ -287,7 +411,9 @@ It covers zero/one/multiple Ring Groups, users/devices without groups, empty
 collections, module dependencies, protected/missing/unsafe manifests,
 initial/unchanged/changed/removed capture, interrupted collection, restart and
 non-executable snapshot handling. It does not establish behaviour on a running
-FreePBX host. Real FreePBX 17/Debian 12/Asterisk 22 verification remains pending
-until an authorised host runs the procedure above and records its output. No
+FreePBX host. Operator-reported empty-capture publication and verification
+passed on separate Debian 12 and Debian 13 hosts. Populated FreePBX
+17/Debian 12/Asterisk 22 verification of this correction remains pending until an
+authorised host runs the upgrade/test procedure above and records its output. No
 manual capture enables The Stream, contacts The Pond, changes PBX configuration
 or claims independent recovery readiness.

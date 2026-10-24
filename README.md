@@ -81,10 +81,13 @@ FreePBX test has been performed by this workspace.
 
 Operator-reported FreePBX 17 testing has since demonstrated authenticated
 publication and independent verification of an empty capture. Ordinary GUI-created
-extensions and a Ring Group are discovered but rejected by reconstruction-profile
-checks reused in capture. Credential readiness no longer adds configuration
-blocking gaps; the field-compatibility correction awaits the read-only diagnostic
-in the [Puddle capture guide](docs/puddle-capture.md#gui-compatibility-diagnostic).
+extensions and a Ring Group exposed reconstruction-profile checks reused in
+capture. The corrected collector retains allowlisted non-secret source settings
+without imposing reconstruction defaults, including observed GUI field differences
+and optional-field absence. Evidence-shaped synthetic regressions pass; populated
+live capture/publication still awaits operator retesting. Credential readiness
+remains separate from configuration completeness. See the
+[capture upgrade procedure](docs/puddle-capture.md#existing-010-capture-correction).
 
 The intended recovery sequence is:
 
