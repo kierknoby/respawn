@@ -1,13 +1,18 @@
 #!/usr/bin/env python3
 from pathlib import Path
+from datetime import datetime
 import hashlib
+import subprocess
 import tarfile
+import tempfile
+import time
 import zipfile
 import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[1]
 metadata = ET.parse(ROOT / 'module/module.xml').getroot()
 version = metadata.findtext('version')
+assert version == '0.1.1'
 assert metadata.findtext('rawname') == 'respawn'
 assert metadata.find('menuitems/respawn').attrib['category'] == 'Connectivity'
 with tarfile.open(ROOT / f'artifacts/respawn-{version}.tgz') as archive:
@@ -24,6 +29,7 @@ with tarfile.open(ROOT / f'artifacts/respawn-{version}.tgz') as archive:
         assert 'respawn/' + required in names
     assert archive.getmember('respawn/bin/respawn').mode == 0o755
     assert archive.extractfile('respawn/LICENSE').read() == (ROOT / 'LICENSE').read_bytes()
+    assert all(member.mtime == 0 for member in archive.getmembers()), 'Module tar entries must remain reproducible.'
     for member in archive.getmembers():
         if not member.isfile() or member.name.endswith(('.png', '.jpg', '.gif', '.webp')):
             continue
@@ -44,6 +50,7 @@ with tarfile.open(ROOT / f'artifacts/respawn-pond-{version}.tgz') as archive:
     assert cron.strip() == b'* * * * * asterisk /usr/sbin/fwconsole respawn protection-reconcile'
     assert not any(name.endswith(('.sqlite', '.key', '.secret', '.token')) for name in names)
     assert not any('development/' in name or '/tests/' in name for name in names)
+    assert all(member.mtime == 0 for member in archive.getmembers()), 'Pond tar entries must remain reproducible.'
 with zipfile.ZipFile(ROOT / f'artifacts/respawn-pond-{version}.zip') as archive:
     names = set(archive.namelist())
     expected = {'respawn-pond/' + path.relative_to(ROOT).as_posix()
@@ -68,6 +75,25 @@ assert f'{pond_zip_hash}  {pond_zip_name}\n' in checksums
 assert (ROOT / 'artifacts' / f'{pond_zip_name}.sha256').read_text() == f'{pond_zip_hash}  {pond_zip_name}\n'
 with zipfile.ZipFile(ROOT / 'artifacts' / f'respawn-site-{version}.zip') as archive:
     names = archive.namelist()
+    expected = {path.relative_to(ROOT / 'build/site').as_posix()
+        for path in (ROOT / 'build/site').rglob('*') if path.is_file()}
+    assert set(names) == expected, 'Website ZIP must contain every built site file at its extraction root.'
+    assert archive.testzip() is None, 'Website ZIP integrity check failed.'
+    timestamps = {info.date_time for info in archive.infolist()}
+    assert len(timestamps) == 1, 'Website files must share their packaging timestamp.'
+    zip_timestamp = next(iter(timestamps))
+    assert zip_timestamp != (2026, 1, 1, 0, 0, 0), 'Website ZIP must not use the obsolete fixed timestamp.'
+    website_timestamp = datetime(*zip_timestamp)
+    assert website_timestamp.second % 2 == 0, 'ZIP timestamps have two-second precision.'
+    assert abs((datetime.now() - website_timestamp).total_seconds()) <= 10, \
+        'Website ZIP timestamps must reflect the current packaging time.'
+    with tempfile.TemporaryDirectory(prefix='respawn-site-mtime-') as temporary:
+        subprocess.run(['unzip', '-q', str(ROOT / 'artifacts' / f'respawn-site-{version}.zip'), '-d', temporary], check=True)
+        for info in archive.infolist():
+            extracted_mtime = (Path(temporary) / info.filename).stat().st_mtime
+            zip_local_mtime = time.mktime(info.date_time + (0, 0, -1))
+            assert abs(extracted_mtime - zip_local_mtime) <= 1, \
+                f'Extracted file must retain its ZIP modification timestamp: {info.filename}'
     assert 'index.html' in names
     assert archive.read('.htaccess').decode() == 'ErrorDocument 404 /404.html\n'
     assert '404.html' in names
@@ -79,6 +105,10 @@ with zipfile.ZipFile(ROOT / 'artifacts' / f'respawn-site-{version}.zip') as arch
         assert 'contracts/' + contract in names
     assert not any(name.startswith('development/') or 'local-pond' in name.lower() for name in names)
     assert not any(name.endswith('.php') or 'state.json' in name or 'credentials' in name.lower() for name in names)
+    for name in names:
+        if name.endswith('.html'):
+            assert f'{version} / WORKING PROTOTYPE'.encode() in archive.read(name), \
+                f'{name} must display the current release version.'
 
 my_connect_name = f'respawn-my-connect-reference-{version}.zip'
 my_connect_sources = [path for path in (ROOT / 'integrations/my-connect-reference').rglob('*') if path.is_file()]

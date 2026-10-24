@@ -1,7 +1,7 @@
 {
   "index": {
     "title": "Respawn",
-    "eyebrow": "FREEPBX 17 / OPEN SOURCE / 0.1.0 PROTOTYPE",
+    "eyebrow": "FREEPBX 17 / OPEN SOURCE / 0.1.1 PROTOTYPE",
     "intro": "Revert locally. Regenerate configuration. Respawn when disaster strikes.",
     "description": "Protect supported FreePBX configuration locally and retain it independently. A working prototype, building towards on-demand recovery.",
     "welcome": {

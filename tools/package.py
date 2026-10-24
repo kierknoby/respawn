@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from datetime import datetime
 from pathlib import Path
 import io
 import tarfile
@@ -22,10 +23,12 @@ def write_source_zip(name, prefix, sources):
             entry.external_attr = 0o644 << 16
             archive.writestr(entry, path.read_bytes())
 
+now = datetime.now().replace(microsecond=0)
+website_timestamp = (now.year, now.month, now.day, now.hour, now.minute, now.second - now.second % 2)
 with zipfile.ZipFile(OUT / f'respawn-site-{VERSION}.zip', 'w', zipfile.ZIP_DEFLATED) as archive:
     for path in sorted(site.rglob('*')):
         if path.is_file():
-            entry = zipfile.ZipInfo(path.relative_to(site).as_posix(), (2026, 1, 1, 0, 0, 0))
+            entry = zipfile.ZipInfo(path.relative_to(site).as_posix(), website_timestamp)
             entry.compress_type = zipfile.ZIP_DEFLATED
             entry.external_attr = 0o644 << 16
             archive.writestr(entry, path.read_bytes())

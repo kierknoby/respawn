@@ -8,7 +8,7 @@ The versioned Stream envelope is defined in
 [`provider-rpc.v2.schema.json`](../contracts/provider-rpc.v2.schema.json);
 provider-neutral routing control is defined in
 [`routing-control.v1.schema.json`](../contracts/routing-control.v1.schema.json).
-See [the 0.1.0 integration guide](provider-integrations.md) for reference
+See [the 0.1.1 integration guide](provider-integrations.md) for reference
 adapters and their evidence boundaries.
 
 ## Provider Connection Identity And Retention

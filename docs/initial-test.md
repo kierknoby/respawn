@@ -267,7 +267,7 @@ firewall, endpoint transport and licensing setup are not reconstructed.
 
 Install and activate the unsigned development module on both systems using the
 FreePBX Module Admin local-upload workflow and the locally generated
-`artifacts/respawn-0.1.0.tgz`. Confirm its Connectivity menu entry and that
+`artifacts/respawn-0.1.1.tgz`. Confirm its Connectivity menu entry and that
 `fwconsole respawn status` runs. This is a test step, not evidence that packaging
 or installation is generally supported. If upload, installation, activation,
 menu access or CLI discovery fails, stop and record it; do not work around module

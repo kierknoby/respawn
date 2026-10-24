@@ -12,7 +12,7 @@ catch (Throwable $exception) {
     \Respawn\Diagnostic::log($diagnostic);
     ?>
     <section class="container-fluid" aria-labelledby="respawn-storage-title">
-      <h1 id="respawn-storage-title">Respawn <small>0.1.0 / Experimental</small></h1>
+      <h1 id="respawn-storage-title">Respawn <small>0.1.1 / Experimental</small></h1>
       <div class="alert alert-danger" role="alert"><strong>Respawn storage is unavailable.</strong>
         <p>Code: <code><?= htmlspecialchars($diagnostic['code'],ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8') ?></code></p>
         <p><?= htmlspecialchars($diagnostic['message'],ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8') ?></p>
@@ -115,7 +115,7 @@ $viewNames=['overview'=>'Overview','protection'=>'Protection','revisions'=>'Revi
 </style>
 <div class="container-fluid respawn-admin">
   <header class="respawn-section" aria-labelledby="respawn-title">
-    <h1 class="respawn-heading" id="respawn-title">Respawn <small>0.1.0 / Experimental</small></h1>
+    <h1 class="respawn-heading" id="respawn-title">Respawn <small>0.1.1 / Experimental</small></h1>
     <p class="respawn-subtitle">Automatic configuration protection and on-demand FreePBX reconstruction.</p>
     <div class="alert alert-<?= $escape($overallClass) ?>" role="status">
       <strong><?= $escape($overallLabel) ?></strong>
