@@ -1,30 +1,151 @@
 {
   "index": {
     "title": "Respawn",
-    "eyebrow": "FREEPBX 17 / CONNECTIVITY / 0.1.0 DEVELOPMENT",
-    "intro": "Rebuild a replacement PBX when recovery is needed.",
-    "description": "Respawn explores an alternative to maintaining a second FreePBX as a warm spare: retain a validated configuration blueprint and reconstruct a replacement on demand. The end-to-end recovery objective is not yet proven.",
+    "eyebrow": "FREEPBX 17 / OPEN SOURCE / 0.1.0 PROTOTYPE",
+    "intro": "Revert locally. Regenerate configuration. Respawn when disaster strikes.",
+    "description": "Protect supported FreePBX configuration locally and retain it independently. A working prototype, building towards on-demand recovery.",
+    "welcome": {
+      "heading": "Respawn",
+      "paragraphs": [
+        "When we first imagined Respawn, it started with a simple question:",
+        "**Why maintain a second PBX waiting for the first one to die when you could reconstruct it on demand?**",
+        "It was an ambitious idea. A different approach to FreePBX disaster recovery, without the assumption that effective protection requires a permanently maintained standby system.",
+        "Now look how far we've come.",
+        "We've built **The Puddle, The Stream and The Pond**. We've installed them on real infrastructure, connected them securely, captured actual FreePBX configuration and independently verified its retention on another server.",
+        "**And it works.**",
+        "We've moved beyond protecting an empty configuration. Respawn 0.1.0 has successfully captured real extensions and a Ring Group, published that configuration through The Stream and verified its integrity in an independently hosted Pond.",
+        "But something particularly interesting happened along the way.",
+        "We realised that the same architecture could provide another valuable capability: **Revert**.",
+        "Imagine making an unwanted configuration change and being able to undo it using an earlier revision stored locally in The Puddle. No disaster. No replacement server. No need to involve The Stream or The Pond.",
+        "Just a straightforward way back to an earlier configuration.",
+        "That discovery gives Respawn two compelling directions: **everyday configuration protection and disaster recovery**.",
+        "And it brings together three distinct recovery operations:",
+        "**Revert. Regenerate. Respawn.**",
+        "Supported by an architecture with names that describe exactly how the pieces fit together:",
+        "**The Puddle. The Stream. The Pond.**",
+        "Of course, we're not finished. We've demonstrated the capture, publication and independent verification of real FreePBX configuration. Executable restoration and complete PBX reconstruction are the next technical challenges.",
+        "But this is no longer just an idea on a drawing board. We're proving the architecture on real systems, one milestone at a time.",
+        "And that's what makes Respawn interesting.",
+        "We're building an open-source framework that could change how FreePBX administrators and telecoms providers think about resilience.",
+        "**Not just another FreePBX backup tool. A different approach to recovery.**",
+        "And we're only getting started."
+      ]
+    },
+    "operations": [
+      ["Revert", "Made a mistake?", "Undo unwanted configuration changes using an earlier compatible local revision in The Puddle. No Stream or Pond is required. Capture and comparison work today; executable native undo is not yet available.", "how-it-works.html#revert"],
+      ["Regenerate", "Need to repair configuration?", "Reconcile supported configuration on an existing PBX against a validated blueprint. This is not replacement provisioning. Planning and synthetic execution are tested; live execution remains unproven.", "how-it-works.html#regenerate"],
+      ["Respawn", "Lost the PBX?", "Use independently retained recovery information to reconstruct a replacement when required. Provisioning, configuration, connectivity and routing activation are separate stages, not a demonstrated complete recovery.", "one-click.html"]
+    ],
+    "milestone": {
+      "date": "24 October 2026",
+      "heading": "Configuration protection, demonstrated across two servers.",
+      "body": "FreePBX 17 / Asterisk 22 on Debian 12 captured two Core users, two PJSIP devices and one Ring Group with no configuration blocking gaps. Authenticated HTTPS publication to an independent Debian 13 Pond, immediate read-back and subsequent verification matched revision identifiers, content hashes and retention receipts.",
+      "boundary": "Configuration complete. Independent retention verified. Credentials not configured. Recovery readiness false. This is not live Revert, Regenerate, replacement reconstruction or credential recovery evidence."
+    },
     "sections": [
-      ["A replacement on demand, not a second PBX to maintain", "Conventional disaster recovery often keeps a standby PBX ready and maintained. Respawn explores retaining the supported configuration and deploying a replacement only when required. The long-term objective is to make a continuously operating warm spare unnecessary for suitable deployments; compatibility, recovery time and continuity must be proven before that is a safe choice."],
-      ["From captured configuration to confirmed recovery", "The intended path is: capture supported module state; validate and retain a blueprint; detect or declare recovery; request provider deployment; reconstruct configuration; verify saved state and telephony readiness; prepare provider connectivity and routing; explicitly authorise activation; confirm recovery with independent inbound/outbound calls and two-way audio. A successful configuration build is only one stage."],
-      ["Three operations, three different jobs", "Revert plans a return to an earlier retained local revision. Regenerate plans local convergence toward a selected blueprint. Respawn requests a provider-controlled replacement and later routing/activation. Capture, comparison and preview are implemented; Revert and Regenerate execute in synthetic tests but native updates/removals/ownership are unavailable. Respawn orchestration is mock-tested; live provider and telephony recovery are unverified."],
-      ["What works today", "The selected v2 profile models Core users, fixed PJSIP devices with original credential references, and dependent Ring Groups. Typed planning, checkpointed execution, configuration read-back, schema/hash checks and mock provider orchestration have synthetic coverage. Exact module versions and compatible global SIP settings are prerequisites. Trunks, routes, voicemail, media and wider PBX state remain outside this profile."],
-      ["A deliberately narrow starting profile", "The long-term objective is comprehensive FreePBX configuration recovery through progressively expanded module support. Extensions and devices, trunks and routes, IVRs, queues, time conditions, announcements, Follow Me, conferences, voicemail, feature codes, destinations, recordings and other standard modules are roadmap areas, not current capabilities. Commercial modules will be assessed where technically and legally feasible. Coverage and compatibility must be demonstrated module by module."],
-      ["Provider preparation is not activation", "A replacement can be provisioned and configured before connectivity is ready. A provider may prepare routing without redirecting traffic; activation needs explicit policy and fresh authority. Submission, acceptance, saved configuration, runtime readiness, registration, calls, audio, routing preparation and activation are separate states."],
-      ["A provider-neutral boundary", "The module exports supported state and submits structured intent. Provider services own authorisation, replacement provisioning, secure secret delivery, connectivity, SBC routing, service lifecycle and cleanup. The public contracts permit alternative providers; no private service compatibility or end-to-end recovery is claimed."],
-      ["Puddle to Stream to Pond", "The Puddle captures supported configuration; the scheduled Stream detects changes, retains exact revisions and retries publication; an experimental standalone Pond provides SQLite retention and AES-GCM credential escrow. A versioned Pond ZIP and installation guide are built with the project package command. Local independent-process tests use synthetic PBX state; separate-host HTTPS deployment and real FreePBX protection remain unverified."],
-      ["Current evidence, not a recovery promise", "Contract tests and local simulations do not establish real FreePBX reconstruction, provider compatibility, endpoint reconnection, live calling or takeover timing. Recovery in minutes is an ambition, not a measurement."],
-      ["Provider changes do not erase the old operation", "Each endpoint and trust profile has a stable non-secret connection identity. Changing endpoint or switching mock/real creates a separate connection; acknowledgements and launches are never reused across it. Credential rotation at the same connection preserves identity. Older operations remain visible and are managed through their original connection. Unresolved work blocks a new launch."]
+      ["A replacement on demand, not a permanent warm spare", "Respawn challenges the assumption that recovery always needs a second PBX maintained continuously. The objective is to deploy a replacement when needed, reducing standby maintenance and configuration duplication, with potential long-term infrastructure savings. It is not yet a production replacement for warm-spare capacity. Recovery time, endpoint registration, inbound/outbound calls and bidirectional audio still need live proof."],
+      ["Protect what is supported. Report what is missing.", "The current capture profile covers supported Core users, fixed PJSIP devices and Ring Groups. Non-secret settings and credential readiness are reported separately. A captured revision is not an executable blueprint. Trunks, routes, voicemail, media, history and wider module coverage still need separate protection. Keep conventional backups."],
+      ["Open source, independent of your infrastructure provider", "Respawn is a GPLv3+ FreePBX Connectivity module. Host your own Pond or use a compatible service. FreePBX UK infrastructure is one option, not a dependency. Provider-neutral contracts keep hosting, billing, connectivity and routing services outside module core; no particular SIP edge or Kamailio deployment is required."]
+    ]
+  },
+  "why-respawn": {
+    "title": "Why Respawn?",
+    "eyebrow": "THE CASE FOR CONFIGURATION-LED RECOVERY",
+    "intro": "The server is replaceable. The telephone system needs a plan.",
+    "description": "We're building around independently retained, versioned configuration: a foundation for local undo, repair and replacement recovery, rather than a permanently maintained second PBX.",
+    "sections": [],
+    "essay": [
+      {
+        "heading": "A PBX shouldn't be irreplaceable.",
+        "paragraphs": [
+          "Deploying a new FreePBX server isn't particularly difficult.",
+          "Recreating everything that made the old one work is another matter.",
+          "That's the problem we're tackling.",
+          "When a PBX fails, we shouldn't automatically need another complete PBX sitting somewhere waiting to take over.",
+          "We should be able to preserve its configuration independently, deploy a replacement when required and reconstruct the telephone system from information we already trust.",
+          "**That's the idea behind Respawn.**",
+          "Not another server to maintain.",
+          "Not another copy of the operating system to keep updated.",
+          "A different approach to protecting what actually matters."
+        ]
+      },
+      {
+        "heading": "Protect the configuration. Not the machine.",
+        "paragraphs": [
+          "Respawn separates configuration protection from the infrastructure running FreePBX.",
+          "**The Puddle** captures supported configuration locally, maintaining a revision history that can identify what changed.",
+          "**The Stream** publishes those revisions securely to independent infrastructure.",
+          "**The Pond** retains them beyond the lifetime of the original PBX.",
+          "The original server can be lost without necessarily losing the information we've protected.",
+          "And because we're retaining revisions rather than treating every backup as an indivisible server image, we can develop more than one way to recover."
+        ]
+      },
+      {
+        "heading": "Not every failure needs another PBX.",
+        "paragraphs": [
+          "A mistaken configuration change isn't a disaster.",
+          "A damaged configuration doesn't necessarily require replacing the server.",
+          "And losing the entire machine shouldn't necessarily mean rebuilding the telephone system manually.",
+          "That's why we're developing three recovery operations.",
+          "**Revert.** Return supported configuration to an earlier revision held locally in The Puddle. No Stream or Pond required.",
+          "**Regenerate.** Reconstruct or reconcile supported configuration on an existing FreePBX installation using a validated blueprint.",
+          "**Respawn.** Deploy a replacement FreePBX installation and reconstruct its supported configuration using independently retained recovery information.",
+          "Different problems. Different responses.",
+          "All built around the same approach to capturing and preserving configuration."
+        ]
+      },
+      {
+        "heading": "We've already proved the first part.",
+        "paragraphs": [
+          "On 24 October 2026, Respawn 0.1.0 successfully captured populated configuration from a real FreePBX 17 installation.",
+          "That included two PJSIP extensions, their associated Core users and a Ring Group.",
+          "The capture completed without configuration coverage gaps.",
+          "We published the revision securely to an independently deployed Pond running on another server.",
+          "The Pond retained the revision, returned it and verified its integrity.",
+          "We then independently repeated the verification.",
+          "**The revision matched. The content hash matched. The retention receipt matched.**",
+          "The Puddle, Stream and Pond worked together exactly as intended for the tested configuration.",
+          "This wasn't a simulated demonstration.",
+          "It was a successful test across two separate servers.",
+          "That's an important milestone, because we now have a working foundation on which to develop the recovery operations."
+        ]
+      },
+      {
+        "heading": "What comes next?",
+        "paragraphs": [
+          "We've demonstrated configuration capture, publication, independent retention and verification.",
+          "We're now building towards putting that information back to work.",
+          "Revert, Regenerate and full Respawn reconstruction are the next engineering challenges. Credential recovery and restoring operational telecoms services are also essential parts of that work.",
+          "We're not presenting those capabilities as finished.",
+          "But the architecture needed to begin building them is no longer theoretical.",
+          "**We've demonstrated that we can protect real FreePBX configuration independently of the server it came from.**",
+          "Now we intend to prove that we can use it to recover."
+        ]
+      },
+      {
+        "heading": "Built for the people running FreePBX.",
+        "paragraphs": [
+          "Respawn is open source.",
+          "We want operators to run their own infrastructure, providers to build their own integrations and developers to improve the framework.",
+          "There should be no requirement to use FreePBX UK, a particular hosting platform or a proprietary recovery service.",
+          "The long-term objective is straightforward:",
+          "**Make the PBX replaceable without making its configuration disposable.**",
+          "That's why we're building Respawn."
+        ]
+      }
     ]
   },
   "overview": {
     "title": "Project Overview",
-    "eyebrow": "THE RECONSTRUCTION MODEL",
-    "intro": "Keep the specification. Deploy a replacement when needed.",
-    "description": "Respawn explores on-demand FreePBX reconstruction as an alternative to continuously maintaining a warm spare for suitable deployments. Configuration is only part of recovery, and the end-to-end objective remains unproven.",
+    "eyebrow": "LOCAL HISTORY / INDEPENDENT PROTECTION / RECOVERY",
+    "intro": "Protect configuration now. Build towards recovery on demand.",
+    "description": "Respawn is a working configuration-protection prototype for FreePBX 17. Local history, independent retention and executable reconstruction have different jobs and different evidence.",
     "sections": [
+      ["The Puddle: useful before anything fails", "Read-only discovery records supported configuration in local revision history. Canonical hashing detects changes, unchanged captures are deduplicated, and comparisons show what differs. Local retention is configurable from 2 to 500 revisions, with protected heads and pinned history. Configuration completeness and credential readiness are separate. A successful capture says what was recorded, not what can be reconstructed."],
+      ["Small mistakes and lost servers are different problems", "Revert is the foundation of local configuration undo using an earlier compatible Puddle revision. It does not require The Stream or The Pond. Regenerate reconciles supported configuration on an existing PBX against a selected executable blueprint. Respawn concerns a replacement server after a larger failure. Native executable Revert and Regenerate remain blocked by missing update, removal and ownership capabilities."],
+      ["The Stream and The Pond: protection beyond the source", "The Stream publishes exact captured revisions to an authenticated, independently hosted Pond and checks durable acknowledgement and read-back. The 0.1.0 workflow has passed real two-server testing. A local Puddle can disappear with its originating server; independent retention addresses that risk, but recovery still depends on coverage, authorised access and separately protected credentials."],
       ["The blueprint is executable configuration", "Module-specific exporters describe supported objects as structured ensure operations. Dependencies order those operations. A target executor invokes supported FreePBX/module interfaces, checkpoints verified work and checks configuration by reading it back. Arbitrary shell commands are not part of the build specification."],
-      ["Start narrow and measure coverage", "The selected v2 slice recreates Core users and associated fixed PJSIP devices before simple ringall Ring Groups. A primary group's no-answer destination references a fallback group, so that destination is built first. Original authentication identity and immutable secret references are preserved. Compatible installed modules and global SIP settings remain prerequisites; trunks, routes, voicemail and out-of-profile options remain gaps."],
+      ["Capture is broader than the executable profile", "The capture collector preserves supported non-secret GUI-generated Core user, fixed PJSIP and Ring Group settings without forcing reconstruction defaults. Optional absent values stay absent; unknown or unsafe fields remain explicit gaps. The executable v2 profile is narrower and requires compatible modules, global SIP settings and exact original credential references. A capture-only revision cannot be executed as a blueprint."],
       ["Open module, external services", "Respawn is GPLv3+ and appears under Connectivity. Provider connectors and controllers have separate service licences. The public provider boundary is neutral: compatible services may use different infrastructure, service lifecycle, numbering and SIP edge systems without changing reconstruction core."],
       ["Data still needs recovery", "Recordings, voicemail audio, CDRs, logs, custom sounds and historical data require separate retention and recovery. A successful configuration build cannot recreate a recording that was never retained. Coverage reports must expose missing modules and fields before an administrator launches recovery."],
       ["One v2 hash rule", "Object keys are recursively sorted; arrays retain their authored order; contentHash is omitted; JSON uses compact UTF-8, unescaped slashes and exact integers. Formatting and object-key order do not change the hash. Reordering an array does. SHA-256 detects change, not who authorised it."]
@@ -32,26 +153,27 @@
   },
   "how-it-works": {
     "title": "How It Works",
-    "eyebrow": "FROM EXPORT TO VERIFIED TAKEOVER",
-    "intro": "Ordered operations. Read-back evidence.",
-    "description": "The complete chain joins local configuration reconstruction to provider-owned provisioning and connectivity, with clear evidence at each boundary.",
+    "eyebrow": "THREE OPERATIONS / THREE LEVELS OF FAILURE",
+    "intro": "Choose the operation that matches the problem.",
+    "description": "A local configuration mistake does not require a replacement PBX. A lost server needs more than local history. Respawn keeps those paths separate.",
     "sections": [
-      ["01 / Capture and record", "The Puddle reads supported module configuration without editing generated Asterisk files. It validates the canonical blueprint and records a local immutable revision. The current exporter covers only selected users, fixed PJSIP devices and Ring Groups; the module roadmap describes the intended expansion."],
-      ["02 / Detect and publish", "A configurable reconciliation command compares canonical hashes and queues changed revisions for publication. A host administrator must install its five-minute cron schedule. Retries use the exact queued revision; manual page views are not the scheduler."],
-      ["03 / Verify independent retention", "The experimental standalone Pond commits immutable revisions to SQLite and encrypts versioned passwords with AES-GCM. Source lineage, not arrival order, selects the current recovery blueprint. The Stream verifies the receipt, retrieved hash and exact passwords. Local independent-process tests pass; public HTTPS and real FreePBX remain untested. The separate Development Pond is only a simulation environment."],
-      ["04 / Reconstruct and verify configuration", "On a replacement, check module versions, coverage, secret references, dependencies and target conflicts before supported writes. Apply configuration and read it back. Saved-state verification does not establish runtime readiness, endpoint registration or successful calls."],
-      ["05 / Verify operation, prepare and authorise", "Independently establish runtime and endpoint registration, then verify calling and bidirectional audio where supported. Provider services may prepare connectivity and routing without activation; authorised policy separately approves any cutover. The complete sequence is intended, not demonstrated end to end."]
+      ["Revert", "Undo an unwanted supported configuration change using an earlier compatible revision retained locally in The Puddle. The Stream and The Pond are not required. Today, capture and revision comparison provide the history behind that workflow. Capture-only snapshots cannot execute a restoration; compatible executable blueprints and safe native update/removal support are still required. Synthetic Revert tests are not proof of live FreePBX undo."],
+      ["Regenerate", "Repair or reconcile supported configuration on the existing PBX against a selected validated executable blueprint. Revert asks for an earlier state; Regenerate asks the current installation to match the chosen specification. It does not provision a new server. Planning and synthetic target execution are implemented; native ownership, updates, removals and authorised apply remain safety gates."],
+      ["Respawn", "Recover from loss of the originating server by retrieving independently retained recovery information from The Pond, authorising replacement infrastructure and reconstructing a compatible FreePBX. Supported module state, original credentials, connectivity and traffic authority must all be available. The complete replacement workflow has not passed live testing."],
+      ["Capture, publish, verify", "For the demonstrated protection path, the Puddle reads supported settings and creates a hashed local revision. An explicit publish command sends that exact capture through The Stream. The Pond commits it before acknowledging retention. Immediate retrieval and subsequent independent verification check the revision, canonical content hash and receipt. This path does not escrow SIP passwords or turn the capture into executable recovery data."],
+      ["Manual capture and scheduled protection are not the same", "Capture-only revision-capture, revision-publish and revision-verify are explicit operator actions in 0.1.0. There is no persistent capture daemon. Separately, the executable-blueprint protection coordinator has a durable retry outbox and a default five-minute interval; a host administrator must install its schedule and satisfy its stricter profile and credential requirements. Installation and page views do not enable automatic protection."],
+      ["Saved configuration is not live telephony", "A replacement must pass module and credential preflight, dependency-ordered reconstruction, apply and saved-state read-back. Runtime readiness, endpoint registration, inbound/outbound calls and bidirectional audio require separate checks. Provider routing can be prepared before activation; redirecting production traffic needs explicit current authority. None of these stages follows automatically from retained configuration."]
     ]
   },
   "one-click": {
     "title": "One-Click Respawn",
     "eyebrow": "ONE ACTION / AN EXPLICIT POLICY",
     "intro": "Launch a recovery operation, not a shell session.",
-    "description": "The administrator selects policy in advance, reviews the effective blueprint and presses Respawn. The provider carries out the authorised orchestration.",
+    "description": "One deliberate action under a reviewed policy is the recovery objective. The demonstrated 0.1.0 milestone is configuration protection, not an automated replacement or a completed live takeover.",
     "sections": [
-      ["Before the button is enabled", "A provider must be authorised, required capabilities available and a reconstruction blueprint acknowledged. The GUI shows the effective blueprint, intent and activation policy. Explicit mock mode is available. A neutral HTTPS contract adapter is included, but real provider compatibility is unverified; no private production service is included."],
+      ["Before the button is enabled", "A provider must be authorised, required capabilities available and an executable reconstruction blueprint acknowledged. The GUI shows intent and activation policy. A retained capture-only snapshot is not enough. Authenticated HTTPS capture retention has passed live testing, but replacement-provider provisioning and recovery integration remain unverified. No private production service is included."],
       ["Revert, Regenerate or Respawn", "Revert selects an earlier local revision; Regenerate targets a selected local blueprint; Respawn requests a provider-controlled replacement. Revision capture, comparison and previews are available. Synthetic tests execute local changes. Native FreePBX revision execution is blocked because update/removal/ownership capabilities are not implemented; mock provider lifecycle does not prove live Respawn."],
-      ["Rehearsal, standby or recovery", "Rehearsal exercises a process without live traffic activation. A standby operation prepares a replacement without redirecting production traffic. Recovery may activate only under agreed policy and readiness gates. The scaffold supports no activation or manually confirmed activation, not automatic production activation."],
+      ["Rehearsal, standby or recovery", "Rehearsal exercises a process without live traffic activation. Standby prepares a replacement without redirecting production traffic; it does not require maintaining that replacement permanently. Recovery may activate only under agreed policy and readiness gates. Mock orchestration supports no activation or manually confirmed activation, not automatic production activation."],
       ["Progress survives the page", "Operation identifiers, revisions, original blueprint/policy and errors are retained. The module journals launch before submission; duplicate launch requests recover the original operation. Reconstruction has per-object pending, running, succeeded, failed and unknown checkpoints, with separate saved-state, apply and verification results. Refresh retrieves authoritative status. Provider outage means unverified, not completed; a mock never claims live calls or audio."],
       ["The target is minutes", "Measure invocation to provisioning complete, configuration ready, connectivity ready, verified takeover and successful inbound/outbound calls with bidirectional audio. Image boot, licences, package installation, secret retrieval, endpoint registration and carrier/SBC changes may dominate. Prepared images or warm capacity may be required; there is no measured live result yet."]
     ]
@@ -60,10 +182,14 @@
     "title": "Operator Workflow",
     "eyebrow": "LOCAL CONTROLS / AUTHORITATIVE STATUS",
     "intro": "Know what is ready. Know what is missing.",
-    "description": "Installation and page views never provision infrastructure. Review coverage, publish deliberately and keep routing decisions explicit.",
+    "description": "Inspect local history, check supported coverage, publish deliberately and verify the retained copy. Installation and page views do not provision infrastructure or redirect calls.",
     "sections": [
-      ["Configure and verify", "The Connectivity page defaults to disabled execution. Explicit mock mode uses synthetic users, devices and groups. Real export requires selected group numbers and a protected manifest that resolves to the existing source credentials. Check module versions, capabilities, identity, acknowledgements and gaps. A configured URL is not connectivity, and missing or mismatched secrets block export."],
-      ["Publish supported intent", "Use fwconsole respawn export firewall and fwconsole respawn publish firewall. Force republishes validated data but never bypasses authorisation. IPv4 host entries are normalised to /32, deduplicated and sorted. IPv6 and broader ranges fail rather than being silently dropped. Missing or disabled Firewall does not imply permission to clear remote intent."],
+      ["Start with local capture", "Install the reviewed 0.1.0 module on an authorised development FreePBX 17 host and inspect the Connectivity page. Run fwconsole respawn revision-capture, then revision-list. Supported Core users, fixed PJSIP devices and Ring Groups are discovered read-only. Empty collections are valid. Capture needs neither a provider connection, a configured Ring Group list nor a secret manifest."],
+      ["Read completeness and credentials separately", "Inspect configurationComplete and blockingGaps. A complete non-secret capture may correctly report credentialStatus: not_configured and recoveryReady: false. Unsupported settings remain explicit gaps. The populated live test demonstrated this exact distinction. Do not treat a complete capture as a complete backup, an executable blueprint or proof of independently recoverable passwords."],
+      ["Inspect history before changing anything", "Use revision-list, revision-show and revision-compare to review earlier supported states and differences. Unchanged captures reuse the existing revision. Capture-only history is the foundation of local Revert, not an executable undo button. Native revision execution is blocked where ownership, update/removal or apply capabilities are missing. Preserve the complete private state directory, not just its top-level journal."],
+      ["Publish the exact revision", "Configure an enrolled HTTPS Pond connection with retain and read permissions. Keep the credential file protected. Run revision-publish with the captured revision ID: it requires durable acknowledgement, immediately retrieves the same snapshot and checks its hash and receipt. Retry the same revision safely using the same connection. No escrow permission or secret manifest is needed for capture-only retention."],
+      ["Verify again, independently", "Run revision-verify with the retained revision ID, then inspect revision-show. The expected retentionState is independently_readback_verified. Confirm matching revision and content hash, not just a successful HTTP response. A Pond outage is unverified retention, not success; your existing local history remains available. The command reference below uses placeholders, never live identities or tokens."],
+      ["Schedule only the workflow you have tested", "The capture-only CLI sequence is manual. The separate protection-reconcile coordinator supports executable-blueprint publication, credential verification and durable retries, but needs its own configured prerequisites and administrator-installed schedule. It is disabled by default. A page view is not a capture event and no scheduler is installed by the module."],
       ["Run, reconcile and retry deliberately", "Publish the versioned reconstruction blueprint, review intent/policy and invoke Respawn. Target preflight rejects conflicts before mutation. After a lost session, Reconcile looks up the stored request on its original provider connection and never launches again. Retry Original Request is a separate deliberate action using the same key, connection and policy. An authoritative not-found is different from an unavailable or malformed response."],
       ["Plan continuity separately", "Existing calls generally cannot move between Asterisk instances. Phones must reconnect; registration timers, NAT, DNS caches and credentials matter. Trunks, number ownership, emergency calling, licences and service records need provider-specific checks. Historical/media data stays outside the declarative reconstruction promise."]
     ]
@@ -72,12 +198,12 @@
     "title": "Providers And Developers",
     "eyebrow": "PUBLIC CONTRACTS / PRIVATE IMPLEMENTATIONS",
     "intro": "A common boundary. More than one provider.",
-    "description": "FreePBX -> Respawn module -> provider connector -> controller -> provisioning, connectivity and SIP edge orchestration. This is a responsibility diagram, not a requirement for direct network links between each component.",
+    "description": "Build around public contracts, not a prescribed hosting or telecoms stack. Local capture belongs in the module; independent retention and recovery services remain replaceable integrations.",
     "sections": [
       ["Module responsibilities", "The module owns GUI/CLI controls, read-only exporters, v2 module prerequisites and typed user/device/group operations, secret references, dependency planning, target-wide locking, durable checkpoints, apply/read-back and provider operation controls. Every instruction declares identity, capabilities, preconditions, postconditions and verification. Alternative providers implement the public boundary without hosting or billing logic in core."],
-      ["One ecosystem, five roles", "The Puddle captures local configuration and revisions; the Stream schedules detection and publication; the independently deployable Pond retains blueprints and encrypted credentials. Its versioned ZIP package does not require FreePBX or Asterisk on the receiving server. River peer federation and optional Lake fleet coordination remain future components. The standalone Pond is experimental and has local independent-service evidence only."],
+      ["One ecosystem, distinct responsibilities", "The Puddle owns local supported state and revision history. The Stream authenticates publication and verifies retention. The standalone Pond independently stores captures, executable blueprints and separately protected credentials. The capture-only HTTPS path has passed a real two-server test. Credential escrow and recovery retain synthetic evidence only. River peer federation and optional Lake fleet coordination remain future production components."],
       ["Bring your own telecoms", "Respawn 0.1.0 documents provider-neutral Stream and routing-control contracts. The my-connect-style reference composes the standard HTTPS transport; the Kamailio reference validates prepare/verify receipts and blocks activation. Neither named integration is required, and neither reference claims private-service compatibility or live route changes."],
-      ["Provider responsibilities", "Provider services own enrolment, identity authorisation, blueprint retention, replacement provisioning, secure secret delivery, connectivity, policy authority, SBC routes, service lifecycle and resource teardown. These implementations remain outside the public module and provider-neutral contracts."],
+      ["Provider responsibilities", "Provider services own enrolment, identity authorisation, independent retention, replacement provisioning, secure secret delivery, connectivity, policy authority, routing, service lifecycle and resource teardown. Host your own Pond or implement compatible contracts. FreePBX UK managed infrastructure is one possible deployment, not a requirement. Neither FreePBX UK nor Kamailio is needed for local Revert or the provider-neutral model."],
       ["Peer Ponds and optional fleet view", "The target ecosystem names the local Puddle, scheduled Stream, independent Pond, peer-to-peer River and optional Lake fleet view. A synthetic two-Pond ledger test demonstrates scoped revision replication and retrieval. There is no production River security/transport or Lake service; the local test is not cross-provider resilience evidence."],
       ["Connection identity survives credentials, not endpoints", "The connection ID describes mode, adapter, HTTPS endpoint and trust policy, never a bearer token or credential-file path. Rotating a credential at the same endpoint preserves identity. Changing endpoint or trust policy creates a separate connection; the old one is retained for status and management. Legacy records without a recorded connection are quarantined, not guessed."],
       ["Connectivity capability boundary", "A provider may integrate its chosen DNS, numbering or connectivity services. Contracts require operation identity, connectivity requests, resource references, acknowledgements, readiness evidence, dependencies and cleanup ownership. Provider endpoints and integration behaviour are not specified or certified here."],
@@ -87,9 +213,10 @@
   "lifecycle": {
     "title": "Recovery, Activation And Teardown",
     "eyebrow": "RESOURCE OWNERSHIP / TRAFFIC AUTHORITY",
-    "intro": "Creating a replacement is not the end of the operation.",
-    "description": "The lifecycle includes readiness, activation, partial failure, cancellation, teardown and reconciliation with service records.",
+    "intro": "Retained configuration is the beginning, not the takeover.",
+    "description": "Protection has passed live testing. Replacement provisioning, reconstruction, readiness, routing activation and cleanup remain separate recovery stages with their own acceptance evidence.",
     "sections": [
+      ["Choose the right starting point", "For an unwanted local change, Revert uses compatible history in The Puddle without The Stream or The Pond. Regenerate targets the existing installation with a selected executable blueprint. A lost PBX requires independently retained information and the wider Respawn lifecycle below. Capture-only snapshots cannot execute any of these restoration operations."],
       ["From acceptance to readiness", "Acceptance and provisioning precede reconstruction, saved-state verification, apply and post-apply verification. Connectivity and routing preparation follow. Readiness receipts bind the exact operation and blueprint, and distinguish coverage, reconstruction, apply, configuration, registration, calls and audio. A failure retains actionable stage/resource information; an unknown mutation is not permission to rerun create."],
       ["Activation is a separate transition", "Takeover needs a current ready operation and the selected activation policy. Real providers must implement fencing so an old source cannot reclaim authority through a delayed update. The mock uses revision checks and manual confirmation; production controller and edge fencing remain unverified."],
       ["Evidence expires; the operation does not disappear", "A fresh authenticated status can describe an active operation after its readiness receipts expire. Respawn keeps it visible for reconciliation and safe management, marks readiness expired and blocks activation until fresh evidence is obtained. A stale transport response is a different failure and remains unauthorised."],
@@ -99,34 +226,42 @@
   },
   "status": {
     "title": "Status And Roadmap",
-    "eyebrow": "EXPERIMENTAL / EVIDENCE FIRST",
-    "intro": "A foundation, not a production recovery service.",
-    "description": "The development scaffold separates implemented code, synthetic checks, source-inspected adapters and unavailable real integrations.",
+    "eyebrow": "0.1.0 / LIVE MILESTONE / 24 OCTOBER 2026",
+    "intro": "Configuration protection works. Recovery execution comes next.",
+    "description": "A working prototype, with a precise evidence boundary. Real configuration capture and independent HTTPS retention are demonstrated; executable restoration and complete PBX recovery remain unproven on live infrastructure.",
     "sections": [
+      ["Implemented and demonstrated on real infrastructure", "On 24 October 2026, the project operator confirmed complete capture of two Core users, two PJSIP devices and one Ring Group on FreePBX 17 / Asterisk 22 / Debian 12. There were no configuration blocking gaps. Authenticated HTTPS publication to an independent Debian 13 Pond, immediate read-back and subsequent verification matched revision identifiers, content hashes and retention receipts. Empty collections had also been tested successfully."],
+      ["What the successful revision actually reports", "configurationComplete: true. retentionState: independently_readback_verified. credentialStatus: not_configured. recoveryReady: false. These are compatible results: supported non-secret configuration was retained and independently verified without a credential manifest. They do not establish complete PBX coverage, credential recovery or executable restoration. This is operator-reported live evidence, not an independent certification or a measured recovery time."],
       ["Implemented and contract-tested", "V2 Core-user/fixed-PJSIP/Ring-Groups blueprints, exact-version and secret preflight, deterministic dependency planning, fsynced operation checkpoints, accepted-response-loss/process-restart recovery, one final apply and read-back. Independent source/target contract tests preserve auth identity and original credential references. The two-PBX demo uses different objects and separate clean targets. Mock calls and audio remain unverified."],
-      ["Source-inspected, not integration-tested", "FreePBX 17 Ring Groups get/add methods, Firewall trusted-zone methods and fwconsole conventions were inspected publicly. Metadata, Connectivity GUI and lifecycle hooks are experimental. A real FreePBX installation and source-to-target reconstruction have not been verified in this environment."],
+      ["Experimental or partially implemented", "Local Revert and Regenerate planners, synthetic execution, native selected-create reconstruction, a scheduled blueprint protection coordinator and AES-GCM credential escrow are implemented. Native FreePBX revision execution is blocked by missing ownership, updates, removals and apply capabilities. Credential recovery, host-scheduled protection and replacement reconstruction have not passed live testing. Mock orchestration and loopback source-loss tests remain synthetic evidence."],
       ["Private integration work required", "Authorised replacement provisioning, prepared images, secret resolution, service lifecycle, connectivity, SBC preparation, authority fencing, call tests and audio evidence remain provider dependencies. Production provider/controller implementations are outside this open-source repository."],
-      ["Priorities", "First prove the selected user/device/group chain, real framework apply and original-credential registration in an explicitly authorised disposable FreePBX 17 lab. Then expand field/global-setting coverage and add version-aware handlers across standard FreePBX modules, beginning with trunks and routes. Commercial modules remain subject to technical and legal feasibility. Prove private hosting, billing, connectivity and SBC contracts separately. Only real inbound/outbound calls with bidirectional audio establish takeover acceptance; no minute target has been measured."]
+      ["Planned work and the next acceptance gates", "Prove safe native updates, removals, ownership and apply before enabling everyday executable undo. Validate original-credential recovery and selected replacement reconstruction in disposable FreePBX systems. Expand module and global-setting coverage incrementally, beginning with trunks and routes. Prove provider provisioning, authority fencing, registration, inbound/outbound calls and bidirectional audio separately. Production River federation and Lake coordination remain planned. No deadline, complete recovery percentage or achieved-minute target is claimed."]
     ]
   },
   "faqs": {
     "title": "Frequently Asked Questions",
     "eyebrow": "SCOPE / SAFETY / RECOVERY",
     "intro": "The questions that matter before a replacement is needed.",
-    "description": "Precise answers about reconstruction, provider services, live traffic and the limits of this development scaffold.",
+    "description": "Practical answers about local history, independent protection, credentials, recovery and what Respawn 0.1.0 has actually demonstrated.",
     "sections": [],
     "faqs": [
-      ["Is Respawn a conventional backup?", "No. Its central artefact is a structured, executable reconstruction blueprint for supported configuration. Separate backups or retention remain essential for media, history and unsupported configuration."],
+      ["Can Respawn undo an accidental configuration change?", "Revert is designed for local configuration undo using an earlier compatible Puddle revision. Capture, history and comparison are implemented; safe executable native undo is not yet available. Capture-only snapshots are non-executable. Do not rely on Respawn to reverse a live change today."],
+      ["Does Revert require internet connectivity?", "The local Revert design uses The Puddle, not The Stream or The Pond. It has no external retention dependency. Compatible executable data and safe native restoration support are still required; no live offline undo has been demonstrated."],
+      ["What happens if The Pond is unavailable?", "Local capture and history remain available. Remote publication or verification cannot establish current independent retention and must report that failure, not success. Retry capture-only publication explicitly when the service returns. The separate blueprint protection coordinator has a durable retry outbox when configured. An older retained revision is not proof that the latest changes were protected."],
+      ["What happens if the originating PBX is destroyed?", "A local Puddle may be lost with it. Authorised access to an independent Pond can preserve retained information beyond that server. Replacement recovery still needs suitable executable data, original credentials, compatible modules, provisioning and verified connectivity. The live milestone proved retention and read-back, not source-loss restoration or complete PBX recovery."],
+      ["Does Respawn capture SIP passwords?", "Not in configuration-only snapshots. SIP passwords, credential hashes and other recognised secret fields are excluded. Non-secret configuration can be complete while credentialStatus is not_configured and recoveryReady is false. Separate protected references and experimental encrypted escrow exist for executable recovery; their live recovery has not been demonstrated."],
+      ["Which FreePBX modules are supported?", "The current read-only capture profile supports reviewed Core user, fixed PJSIP device and Ring Group settings, including GUI-generated differences seen in the live test. Unknown or unsafe fields remain explicit gaps. Executable reconstruction has a narrower selected profile. Trunks, routes, IVRs, queues, voicemail, custom modules and wider settings are not comprehensively covered."],
+      ["Does Respawn replace conventional backups?", "No. Keep tested conventional backups for full-system recovery, unsupported configuration, recordings, voicemail media, CDRs, logs and other history. Configuration-only capture is neither a system image nor an executable recovery blueprint."],
       ["Why explore reconstruction instead of a warm spare?", "Maintaining a second PBX means keeping standby infrastructure compatible and ready. Respawn explores retaining a validated blueprint and deploying a replacement only when needed, with the objective of avoiding a continuously operating spare for suitable deployments. The complete recovery path and timing have not been proven, so this is not yet a general substitute for disaster-recovery capacity."],
       ["What do Revert, Regenerate and Respawn do?", "Revert selects an earlier retained local revision. Regenerate reconciles supported local configuration toward a selected blueprint. Respawn requests provider-controlled deployment of a replacement PBX, followed by reconstruction, routing preparation and separately authorised activation. Local revision capture, comparison and preview are implemented; synthetic Revert/Regenerate execution and mock Respawn orchestration are tested, not live services."],
       ["Can native FreePBX currently execute Revert or Regenerate?", "No. The native target currently supports selected creates, but not verified ownership, updates or removals. Native revision plans that require these capabilities remain blocked. Synthetic target execution is not evidence of native FreePBX execution."],
       ["Does a blueprint contain commands?", "It contains validated typed operations with module adapters, parameters and dependency references. It must never contain unrestricted shell commands or browser-supplied remote scripts."],
       ["What can the current slice reconstruct?", "Selected no-voicemail Core users, their fixed PJSIP devices with stable numbers/auth identities/original-secret references, and simple ringall Ring Groups with numeric members and hangup or another selected group's no-answer destination. Users precede devices; devices and fallback groups precede dependent groups. Installed matching modules and global SIP configuration are prerequisites. This is the deliberately limited starting profile; the objective is to expand comprehensively across FreePBX modules as handlers and compatibility evidence are added."],
-      ["Can I install The Pond separately?", "Yes. The experimental standalone Pond is packaged as a versioned ZIP with the endpoint, shared contracts, configuration examples and installation guide. It runs with PHP-FPM, nginx and SQLite on a separate Linux server; FreePBX and Asterisk are not required there. The build and checksum are local project artefacts until published through a project release."],
+      ["Can I host my own Pond?", "Yes. The standalone Pond is packaged separately with installation and operator documentation. It runs with PHP-FPM, nginx and SQLite on Linux; it does not need FreePBX or Asterisk. The live configuration-retention test used Debian 13. Protect enrolments, tokens, the database and any escrow key, maintain independent backups and restrict network access. The implementation remains experimental."],
       ["Are existing endpoint passwords changed?", "They must not be. The real source exporter checks a protected immutable-version secret reference against the existing source password; the target resolves the same reference. Missing or mismatched original credentials block recovery. Secret values and password hashes do not appear in public blueprints, logs, screenshots or demo reports. Real secret transport remains a private integration requirement."],
       ["What happens if device creation is interrupted?", "Core can save a user, device metadata and PJSIP settings at separate times. The executor persists running state before a mutation, then reads actual target state before marking success. A lost response is unknown. Equivalent complete objects are verified on retry; conflicting or partial objects stop for explicit reconciliation. One final apply is separate from object creation, and apply failure does not become readiness."],
-      ["Has this been proven on real FreePBX?", "The selected create chain has source inspection and native-shaped contract tests, but this review pass did not run it on a FreePBX host. Contract tests are not installation, native Revert/Regenerate, replacement or telephony evidence. The lab runbook describes the additional proof required."],
-      ["Can I recover a complete PBX today?", "No. The scaffold is experimental. Extensions, trunks, secrets, routing modules and non-declarative data are not fully covered. It must not be sold or operated as a complete recovery service."],
+      ["What has been tested on real infrastructure?", "On 24 October 2026 the operator confirmed FreePBX 17 / Asterisk 22 capture on Debian 12 of two Core users, two PJSIP devices and one Ring Group, with no configuration blocking gaps. Authenticated HTTPS publication to an independent Debian 13 Pond, immediate read-back and subsequent verification matched revision identifiers, hashes and receipts. Credentials were not configured and recovery readiness remained false. Live executable Revert, Regenerate, replacement reconstruction and credential recovery were not part of that test."],
+      ["Can it restore an entire FreePBX installation?", "No. Respawn is a working configuration-protection prototype, not a full-system restore or complete recovery service. Supported capture does not cover every module, secret, route, licence or historical asset. Executable reconstruction remains experimental and more restrictive than capture."],
       ["What does one-click mean?", "One deliberate launch action under an already configured policy, after reviewing the acknowledged blueprint and intent. It does not mean bypassing authorisation, readiness gates or activation policy."],
       ["Does rehearsal redirect my calls?", "No. Rehearsal and standby prohibit activation in the scaffold. Real providers must enforce the same separation, not rely on a GUI label."],
       ["Is routing preparation the same as activation?", "No. Preparation can reserve and validate a path without sending production traffic to it. Activation is separately authorised and must be confirmed by the routing authority."],
@@ -134,7 +269,8 @@
       ["Is The River a central replication service?", "No. The intended River is a peer-to-peer protocol between independently operated Ponds; a relay may carry opaque traffic later without becoming the trust authority. Only a synthetic two-Pond ledger is tested. Production authentication, encryption, federation transport and recovery authority are not implemented."],
       ["Does The Lake store blueprints or control recovery?", "No. The intended Lake is optional fleet inventory, policy and coordination. Ponds retain recovery data and remain independently operable. The Lake service is not implemented, and it must not become a sole repository or activation authority."],
       ["Does Respawn require a particular connectivity provider?", "No. The module uses provider-neutral operation contracts. Compatible providers may implement connectivity, numbering and routing services through their own authorised interfaces."],
-      ["Does Respawn automatically keep an off-site recovery copy today?", "The coordinator and standalone encrypted Pond implementation are locally tested, including exact-password recovery after source files are removed. A host administrator must install cron and deploy an independently hosted, trusted HTTPS Pond. No such deployment or real FreePBX test has been performed here. Current status requires actual revision retrieval and credential verification, never just capture or submission."],
+      ["Does it require FreePBX UK infrastructure or Kamailio?", "No. FreePBX UK managed infrastructure is one possible deployment. The Pond and Stream contracts are provider-neutral, and Kamailio is an optional routing-control reference, not a dependency. Local capture and the local Revert model require neither service."],
+      ["Is independent protection automatic?", "Not for the demonstrated capture-only CLI sequence: capture, publish and verify are explicit commands. Separately, a disabled-by-default executable-blueprint coordinator supports scheduled detection, publication, credential checks and retries. A host administrator must configure its prerequisites and install its schedule. The live capture-only milestone did not prove unattended protection or host cron."],
       ["Where do hosting and service lifecycle belong?", "Inside the provider integration. The module submits provider-neutral operation intent; replacement provisioning and service/billing reconciliation remain provider responsibilities."],
       ["Will existing calls continue?", "Do not assume so. Established calls generally cannot migrate to a new Asterisk instance. Endpoint reconnection and trunk/number routing must be planned and verified separately."],
       ["Can both PBXs be active?", "Not safely without explicit authority controls. Production controllers and edges must fence stale source/replacement authority and reject replayed or delayed activation policy. This is not proven by the mock."],
@@ -158,12 +294,15 @@
     "title": "Security, Licence And Attribution",
     "eyebrow": "EXPLICIT TRUST / OPEN SOURCE",
     "intro": "Keep authority outside the failed machine.",
-    "description": "PBXs describe authorised intent. Controllers authorise policy. SIP edges enforce authorised controller policy. Each boundary requires its own evidence.",
+    "description": "Local history, remote retention and recovery authority protect different things. The live HTTPS milestone establishes a working path, not a production security audit or complete recovery assurance.",
     "sections": [
-      ["Credentials and signatures", "The module uses protected host-file references for authentication and original PJSIP passwords. The standalone Pond encrypts immutable credential versions using AES-GCM with a separately held key; a different recovery token can retrieve them after source loss. Local tests use synthetic secrets and real encryption. Public TLS deployment, production security assurance and signed-artefact verification remain unproven. A content hash is not a signature."],
+      ["Configuration capture excludes secrets", "Read-only captures retain only reviewed non-secret settings. SIP passwords and recognised credential fields are excluded before canonical hashing, revision storage and publication. Unknown or unsafe fields are gaps, not permission to export arbitrary values. Complete non-secret capture does not require a manifest and never implies credential recovery readiness. Do not publish raw PBX snapshots or diagnostic dumps."],
+      ["Authenticated transport and scoped access", "The Stream uses authenticated HTTPS, certificate verification, endpoint-bound connection identity, protected bearer-file references, bounded messages and timeouts. Pond access is enrolled and scoped to the authorised source and operation; request freshness and replay checks are enforced. Live two-server capture publication and read-back passed. Independent security review, malicious-server testing, broad version compatibility and production assurance remain outstanding."],
+      ["Credential recovery is a separate path", "Executable recovery uses identity-bound immutable secret references and protected manifests. The standalone Pond supports AES-GCM escrow with a separately held key and recovery-scoped token. Synthetic source-loss tests exercise exact-secret retrieval, wrong-key and tamper rejection. The live 0.1.0 protection test did not configure credentials or establish independent credential recovery. Protect and back up keys and recovery authority separately from the source PBX."],
+      ["Integrity is not authority", "Canonical SHA-256 hashes and exact read-back detect changed content. They do not authenticate a publisher, sign an artefact or authorise traffic activation. Authentication, enrolment, retention receipts and routing authority have distinct responsibilities. Signed artefacts, production policy signing and live controller/edge fencing remain unproven."],
       ["Local safeguards", "The GUI is behind FreePBX authentication, section authorisation and session-bound CSRF checks. Typed operations reject shell and dialplan input. Target conflicts stop reconstruction. State updates use locking and atomic replacement; the state directory must be host-protected. This is not a production security audit."],
       ["Licence and provenance", "Respawn and the included standalone Pond implementation are GPLv3+; original notices are retained. Other provider and infrastructure services have their own licences. FreePBX and other names are used descriptively, with no endorsement implied."],
-      ["Reference and AI assistance", "Native Dial-Tone is a distinct native softphone project. GitHub Copilot assisted development and documentation. Human acceptance and authorised lab evidence remain necessary."]
+      ["Public information, private operations", "This static website is not a management console. No production identities, credentials, private blueprints, enrolment records or routing controls belong here. FreePBX UK infrastructure is optional; provider-neutral contracts do not transfer trust automatically to any service. GitHub Copilot assisted development and documentation; human review and authorised integration testing remain essential."]
     ]
   }
 }

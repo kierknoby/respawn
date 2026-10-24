@@ -10,9 +10,10 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--reference', action='store_true', help='Read-only public reference inspection')
 args = parser.parse_args()
 screens = ROOT / 'artifacts/screenshots'
+page_names = set(json.loads((ROOT / 'website/pages.json').read_text())) | {'404'}
 for viewport in ['desktop', 'mobile']:
-    files = sorted(path for path in screens.glob('*-' + viewport + '.png') if not path.name.startswith('review-'))
-    sheet = Image.new('RGB', (1500, 1250), 'white')
+    files = sorted(path for path in screens.glob('*-' + viewport + '.png') if path.name.removesuffix('-' + viewport + '.png') in page_names)
+    sheet = Image.new('RGB', (1500, max(1, (len(files) + 4) // 5) * 625), 'white')
     draw = ImageDraw.Draw(sheet)
     for index, path in enumerate(files):
         image = Image.open(path).convert('RGB')

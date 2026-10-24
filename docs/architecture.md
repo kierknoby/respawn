@@ -8,12 +8,18 @@ inventory or backup reference. The intention is to supersede slow conventional
 backup/restore for supported declarative configuration, not historical/media data.
 
 ```text
-FreePBX modules -> The Puddle (local supported state/revisions)
- -> The Stream (scheduled detect/capture/publish/verify)
- -> The Pond (independent retention and recovery authority)
- <-> The River (optional peer-to-peer Pond replication)
- -> fresh PBX -> existing module reconstruction executor
+Local protection:
+FreePBX modules -> The Puddle (local supported state/revisions) -> Revert
+
+Independent protection:
+The Puddle -> The Stream (authenticated publication/read-back) -> The Pond
+
+Recovery objective:
+The Pond -> authorised reconstruction -> replacement FreePBX
  -> provider connectivity/routing -> verification -> explicit activation
+
+Regenerate reconciles an executable blueprint on an existing FreePBX.
+The Pond <-> The River (optional peer-to-peer Pond replication)
 
 The Lake (optional fleet inventory/policy) coordinates metadata and delegated
 actions; it is not required for Pond-to-Pond replication or ordinary recovery.
@@ -34,7 +40,7 @@ traffic; this diagram does not assert a private network topology.
 | SIP edge | Enforce authorised controller policy and report effective state | A PBX may directly authorise arbitrary routes |
 
 The Pond is the independent retention and authorised recovery-material retrieval
-service in the ecosystem; it is not bound to one hosting or telecommunications provider. `development/local-pond/`
+service in the ecosystem; it is not bound to one hosting or telecoms provider. `development/local-pond/`
 is a development-only **Development Pond** reference, not the production
 controller and not The Puddle. Compatible independent providers implement the
 public contracts. No
@@ -48,10 +54,19 @@ the provider boundary.
 The PHP `Application` shares GUI/CLI logic and accepts an injected `Provider`.
 The GUI factory offers disabled, explicit mock and neutral HTTPS provider modes.
 HTTPS uses a newly specified public JSON profile, not an asserted private endpoint.
-Real provider compatibility and enrolment remain release gates.
+Replacement-provider compatibility and its enrolment remain release gates.
 `MockProvider` runs locally and never accesses a
 network. Its v2 configuration stage uses BuildSpec and BuildExecutor against a
 persistent clean SimulatedPbx, not a separate status-only reconstruction loop.
+
+On 24 October 2026 the operator confirmed populated non-secret FreePBX 17 capture
+and authenticated HTTPS publication to an independent Debian 13 Pond, with
+matching immediate and subsequent read-back. The source ran Debian 12/Asterisk
+22. Configuration was complete and independently retained; credentials were not
+configured and recovery readiness remained false. This evidence does not cover
+replacement-provider orchestration, executable recovery or credential retrieval.
+Capture-only commands are manual; scheduled executable-blueprint protection
+remains a separate workflow with stricter prerequisites.
 FreePbxBuildTarget implements the same BuildTarget contract using inspected Core
 user/device and Ringgroups writes, fresh read-only snapshots and a fixed final
 framework reload callback. See reconstruction-v2.md for fields and prerequisites.
@@ -69,7 +84,8 @@ The operator model has three distinct actions. **Revert** selects an earlier
 retained revision; **Regenerate** reconciles the local supported scope to a
 selected blueprint; **Respawn** requests a provider-controlled replacement build
 and later routing/activation. Revision capture, comparison and read-only planning
-are local. Revert and Regenerate execute against the synthetic target in tests,
+are local. Revert uses The Puddle without The Stream or The Pond. Capture-only
+snapshots are not executable inputs to restoration. Revert and Regenerate execute against the synthetic target in tests,
 but the native FreePBX reconciliation target rejects updates/removals and marks
 ownership unverified. Native revision plans are therefore not executable. The
 separate native reconstruction CLI has a fixed explicit framework-reload callback
@@ -86,7 +102,7 @@ escrowed using AES-GCM with a Pond-held key and read back before readiness.
 Independent recovery credentials retrieve a protected bundle consumed by the
 existing `FileSecrets` and reconstruction executor. The source-loss test uses a
 separate HTTP process and real encryption/storage, but synthetic source/target.
-Public TLS deployment, FreePBX scheduling and native execution remain lab gates.
+Live credential recovery, FreePBX scheduling and native execution remain lab gates.
 Mock/Development Pond/injected evidence cannot become `protected_and_current`.
 
 The five ecosystem components and their target topology are specified in

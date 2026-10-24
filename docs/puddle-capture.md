@@ -39,7 +39,7 @@ values are retained when safely representable.
 Only reviewed non-secret fields are accepted. Unknown fields, nested/non-scalar
 values, credential-bearing URIs, missing required identity/profile fields and
 inconsistent fixed-device bindings remain unsupported. SQL/AMPUSER passwords,
-SIP secrets and `md5_cred` never enter snapshots. This is the supported discovery
+SIP secrets, `secret_origional` and `md5_cred` never enter snapshots. This is the supported discovery
 scope, not an inventory of every AMPUSER key or every FreePBX module. Capture
 does not assess or certify executable reconstruction compatibility; all such
 revisions remain non-executable. The reconstruction validators are unchanged.
@@ -162,8 +162,8 @@ retention of that exact local snapshot, not complete recovery.
 
 ### Existing Pond Compatibility Update
 
-The deployed Pond implements the generic `provider-rpc.v2` dispatcher but does
-not yet recognise the two capture methods. The compatibility change is limited to
+Older Ponds may implement the generic `provider-rpc.v2` dispatcher without
+recognising the two capture methods. The compatibility change is limited to
 `pond/Pond.php` and the new autoloaded
 `module/src/Reconstruction/ConfigurationCapture.php`. It stores captures as a
 new object kind in the existing SQLite `objects` table. It requires no table
@@ -200,9 +200,9 @@ This correction needs no Pond update, enrolment change, secret manifest, module
 database migration or Asterisk reload. Keep the existing provider connection and
 revision journal. Do not enable protection or change routing for this test.
 
-The correction is currently an uncommitted local change on `0-1-0_Dev`.
-Downloading that branch from GitHub will not include it until separately
-authorised and published. Build from the reviewed corrected workspace instead:
+Build the reviewed corrected `0-1-0_Dev` workspace with the commands below.
+This procedure remains available for older installed modules; the operator's
+updated development module has now passed populated capture and retention:
 
 ```sh
 test "$(git branch --show-current)" = 0-1-0_Dev
@@ -411,9 +411,13 @@ It covers zero/one/multiple Ring Groups, users/devices without groups, empty
 collections, module dependencies, protected/missing/unsafe manifests,
 initial/unchanged/changed/removed capture, interrupted collection, restart and
 non-executable snapshot handling. It does not establish behaviour on a running
-FreePBX host. Operator-reported empty-capture publication and verification
-passed on separate Debian 12 and Debian 13 hosts. Populated FreePBX
-17/Debian 12/Asterisk 22 verification of this correction remains pending until an
-authorised host runs the upgrade/test procedure above and records its output. No
+FreePBX host. On 24 October 2026 the operator confirmed populated FreePBX
+17/Debian 12/Asterisk 22 capture of two users, two PJSIP devices and one Ring
+Group with no configuration gaps, authenticated HTTPS retention on an independent
+Debian 13 Pond, immediate read-back and subsequent verification with matching
+revision identifiers, content hashes and receipts. Empty collections also passed.
+Configuration was complete; credentials were not configured and recovery
+readiness remained false. Executable restoration and credential recovery were
+not tested. See [dated evidence](validation.md). No
 manual capture enables The Stream, contacts The Pond, changes PBX configuration
 or claims independent recovery readiness.

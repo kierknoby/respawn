@@ -16,7 +16,11 @@ python3 tests/site.py
 
 Open `build/site/index.html` directly in a browser; relative links work without a
 development server. The verification script temporarily serves only extracted ZIP
-contents on loopback, checks ten pages at desktop/mobile widths, then shuts down.
+contents on loopback, checks eleven pages plus 404 at desktop, mobile and
+narrow-mobile widths, then shuts down. The package includes the complete welcome
+note and the dedicated Why Respawn? page. Golden-copy checks preserve both texts
+with the approved telecoms terminology; internal fragments and every FAQ are
+checked as well.
 Screenshots are in `artifacts/screenshots/`; the validation JSON is local only.
 
 ## Upload Procedure For A Separately Authorised Deployment

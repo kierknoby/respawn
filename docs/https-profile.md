@@ -142,5 +142,10 @@ GUI provider mode exports the explicitly selected real Ring Groups/users/devices
 it cannot
 silently send fixture blueprints. Launch blocks changed/unacknowledged configuration.
 Enrolment and revocation are local administrator commands in `pond/bin/pond.php`.
-Real public TLS, DNS and FreePBX service permissions remain unverified; the new
-service test uses authenticated loopback HTTP, not production TLS.
+On 24 October 2026 the operator confirmed the capture-only path over authenticated
+HTTPS between a FreePBX 17 / Asterisk 22 / Debian 12 host and a separate Debian
+13 Pond. Durable retention, immediate read-back and subsequent verification
+matched identifiers, hashes and receipts. This does not establish live credential
+recovery, executable reconstruction, broad compatibility or a production security
+assessment. Automated independent-process tests remain authenticated loopback
+HTTP and are not themselves public TLS evidence.

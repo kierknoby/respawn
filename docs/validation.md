@@ -1,5 +1,32 @@
 # Local Validation Results
 
+## Populated Configuration Protection (Operator-Confirmed, 24 October 2026)
+
+The operator confirmed Respawn 0.1.0 capture on FreePBX 17 / Asterisk 22 /
+Debian 12 of two Core users, two PJSIP devices and one Ring Group, with no
+configuration blocking gaps. Authenticated HTTPS publication to a separately
+hosted Debian 13 Pond, immediate read-back and subsequent independent
+verification matched revision identifiers, content hashes and retention receipts.
+Empty configuration collections had also passed earlier live testing.
+
+The final revision reports `configurationComplete: true`,
+`retentionState: independently_readback_verified`, `credentialStatus: not_configured`
+and `recoveryReady: false`. This confirms configuration protection without a
+credential manifest. It does not establish executable Revert, Regenerate,
+replacement reconstruction, independent credential recovery, registration, calls,
+audio, host-scheduled protection, a recovery duration or production readiness.
+This is operator-provided evidence, not independently reproduced in this workspace.
+No private identities, network addresses, secrets or revision payloads are published.
+
+The website now distinguishes that evidence from synthetic tests and planned
+recovery. Local extracted-ZIP browser checks pass for all eleven pages plus 404
+at 1440px, 390px and 320px widths: 36 page/viewport checks, navigation, local
+fragments, assets, keyboard menu/skip links, every FAQ and exact approved editorial
+text. Screenshots and the validation report are ignored local artefacts. Chromium
+uses locally extracted dependencies beneath `build/`; no host or live PBX was
+modified for the browser checks. Historical results below retain their original
+dates and limitations.
+
 ## Diagnostic Rotation CI Correction (23 October 2026)
 
 The failed `Respawn Scaffold Checks` run for commit `ebb8bb6` used Ubuntu 24.04
